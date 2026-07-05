@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "vnmrsys.h"			/* To define UNIX (or VMS)	*/
 
 #define COMPLETE	0
@@ -379,47 +380,111 @@ int xposebufalloc(int nbytes, int bufstatus)
 |   complex half-transformed 2D data set.       |
 |                                               |
 +----------------------------------------------*/
+
+/* SIMD-friendly blocks for symxpose's inner loop */
+#define RBS 8
+#define CBS 4
+ 
+static inline __attribute__((always_inline)) void t8x8(const float s[RBS][RBS], float d[RBS][RBS])
+{ for (int i=0;i<RBS;i++) for (int j=0;j<RBS;j++) d[j][i]=s[i][j]; }
+ 
+static inline __attribute__((always_inline)) void t4x4(const double s[CBS][CBS], double d[CBS][CBS])
+{ for (int i=0;i<CBS;i++) for (int j=0;j<CBS;j++) d[j][i]=s[i][j]; }
+ 
+static void symxpose_real(float *mat, int n)
+{
+   int i, j;
+   for (i = 0; i + RBS <= n; i += RBS) {
+      float in[RBS][RBS], out[RBS][RBS];
+      for (int k=0;k<RBS;k++) memcpy(in[k], mat+(size_t)(i+k)*n+i, RBS*sizeof(float));
+      t8x8(in, out);
+      for (int k=0;k<RBS;k++) memcpy(mat+(size_t)(i+k)*n+i, out[k], RBS*sizeof(float));
+      for (j = i + RBS; j + RBS <= n; j += RBS) {
+         float a_in[RBS][RBS], a_out[RBS][RBS], b_in[RBS][RBS], b_out[RBS][RBS];
+         for (int k=0;k<RBS;k++) {
+            memcpy(a_in[k], mat+(size_t)(i+k)*n+j, RBS*sizeof(float));
+            memcpy(b_in[k], mat+(size_t)(j+k)*n+i, RBS*sizeof(float));
+         }
+         t8x8(a_in, a_out); t8x8(b_in, b_out);
+         for (int k=0;k<RBS;k++) {
+            memcpy(mat+(size_t)(i+k)*n+j, b_out[k], RBS*sizeof(float));
+            memcpy(mat+(size_t)(j+k)*n+i, a_out[k], RBS*sizeof(float));
+         }
+      }
+   }
+   for (int r = 0; r < n; r++) {
+      int cstart = (r >= i) ? 0 : i;
+      for (int c = (r+1 > cstart ? r+1 : cstart); c < n; c++) {
+         float t = mat[r*n+c]; mat[r*n+c] = mat[c*n+r]; mat[c*n+r] = t;
+      }
+   }
+}
+ 
+static void symxpose_complex(float *matf, int n)
+{
+   double *mat = (double *)matf;
+   int i, j;
+   for (i = 0; i + CBS <= n; i += CBS) {
+      double in[CBS][CBS], out[CBS][CBS];
+      for (int k=0;k<CBS;k++) memcpy(in[k], mat+(size_t)(i+k)*n+i, CBS*sizeof(double));
+      t4x4(in, out);
+      for (int k=0;k<CBS;k++) memcpy(mat+(size_t)(i+k)*n+i, out[k], CBS*sizeof(double));
+      for (j = i + CBS; j + CBS <= n; j += CBS) {
+         double a_in[CBS][CBS], a_out[CBS][CBS], b_in[CBS][CBS], b_out[CBS][CBS];
+         for (int k=0;k<CBS;k++) {
+            memcpy(a_in[k], mat+(size_t)(i+k)*n+j, CBS*sizeof(double));
+            memcpy(b_in[k], mat+(size_t)(j+k)*n+i, CBS*sizeof(double));
+         }
+         t4x4(a_in, a_out); t4x4(b_in, b_out);
+         for (int k=0;k<CBS;k++) {
+            memcpy(mat+(size_t)(i+k)*n+j, b_out[k], CBS*sizeof(double));
+            memcpy(mat+(size_t)(j+k)*n+i, a_out[k], CBS*sizeof(double));
+         }
+      }
+   }
+   for (int r = 0; r < n; r++) {
+      int cstart = (r >= i) ? 0 : i;
+      for (int c = (r+1 > cstart ? r+1 : cstart); c < n; c++) {
+         double t = mat[r*n+c]; mat[r*n+c] = mat[c*n+r]; mat[c*n+r] = t;
+      }
+   }
+}
+ 
+static void symxpose_hyper(float *mat, int n)
+{
+   const int TILE = 32;
+   for (int bi = 0; bi < n; bi += TILE) {
+      int ih = bi+TILE<n ? TILE : n-bi;
+      for (int bj = bi; bj < n; bj += TILE) {
+         int jw = bj+TILE<n ? TILE : n-bj;
+         for (int i = 0; i < ih; i++) {
+            int j0 = (bj==bi) ? i+1 : 0;
+            for (int j = j0; j < jw; j++) {
+               int r = bi+i, c = bj+j;
+               if (r >= c && bj == bi) continue;
+               float tmp[4];
+               memcpy(tmp, mat+((size_t)r*n+c)*4, 16);
+               memcpy(mat+((size_t)r*n+c)*4, mat+((size_t)c*n+r)*4, 16);
+               memcpy(mat+((size_t)c*n+r)*4, tmp, 16);
+            }
+         }
+      }
+   }
+}
+
 /* npoints      number of "datatype" points			*/
 /* datatype     1 = real    2 = complex    4 = hypercomplex	*/
 static void symxpose(float *matrix, int npoints, int datatype)
 {
-   register int         inc1,
-                        inc2,
-                        skip,
-                        k;
-   register float       *tptr1,
-                        *tptr2,
-                        *pntr1,
-                        *pntr2,
-                        tmp;
- 
-   skip = datatype;
-   inc1 = npoints - 1;
-   inc2 = npoints*skip;
-   pntr2 = matrix + inc2;
- 
-   for (pntr1 = matrix + skip; pntr1 < (matrix + (inc2 * npoints));
-           pntr1 += (inc2 + skip))
-   {
-      tptr2 = pntr2;
-      tptr1 = pntr1;
-      while (tptr1 < (pntr1 + (skip * inc1)))
-      {
-         for (k = 0; k < skip; k++)
-         {
-            tmp = *tptr1;
-            *tptr1++ = *tptr2;
-            *tptr2++ = tmp;
-         }
- 
-         tptr2 += (inc2 - skip);
-      }
- 
-     pntr2 += (inc2 + skip);
-     inc1 -= 1;
-   }
+  if (datatype == HYPERCOMPLEX)      symxpose_hyper(matrix, npoints);
+  else if (datatype == COMPLEX)      symxpose_complex(matrix, npoints);
+  else if (datatype == REAL)         symxpose_real(matrix, npoints);
 }
- 
+
+static int is_pow2(int n)
+{
+   return (n > 0) && ((n & (n - 1)) == 0);
+}
  
 /*-----------------------------------------------
 |                                               |
@@ -432,6 +497,75 @@ static void symxpose(float *matrix, int npoints, int datatype)
 |   handled within this routine.                |
 |                                               |
 +----------------------------------------------*/
+
+/* SIMD-friendly blocks for nonsymxpose's copy-into-buffer */
+static inline __attribute__((always_inline)) void tile_real_np(const float *src, int src_ld, float *dst, int dst_ld)
+{
+    float in[RBS][RBS], out[RBS][RBS];
+    for (int i=0;i<RBS;i++) memcpy(in[i], src+(size_t)i*src_ld, RBS*sizeof(float));
+    t8x8(in, out);
+    for (int i=0;i<RBS;i++) memcpy(dst+(size_t)i*dst_ld, out[i], RBS*sizeof(float));
+}
+ 
+static inline __attribute__((always_inline)) void tile_complex_np(const double *src, int src_ld, double *dst, int dst_ld)
+{
+    double in[CBS][CBS], out[CBS][CBS];
+    for (int i=0;i<CBS;i++) memcpy(in[i], src+(size_t)i*src_ld, CBS*sizeof(double));
+    t4x4(in, out);
+    for (int i=0;i<CBS;i++) memcpy(dst+(size_t)i*dst_ld, out[i], CBS*sizeof(double));
+}
+ 
+static void scalar_block_real(const float *src, float *dst, int bi, int bj, int bh, int bw, int src_cols, int dst_cols)
+{
+    for (int i=0;i<bh;i++) for (int j=0;j<bw;j++)
+        dst[(bj+j)*dst_cols+(bi+i)] = src[(bi+i)*src_cols+(bj+j)];
+}
+ 
+static void scalar_block_complex(const double *src, double *dst, int bi, int bj, int bh, int bw, int src_cols, int dst_cols)
+{
+    for (int i=0;i<bh;i++) for (int j=0;j<bw;j++)
+        dst[(bj+j)*dst_cols+(bi+i)] = src[(bi+i)*src_cols+(bj+j)];
+}
+ 
+static void xpose_into_buffer_real(const float *matrix, float *buffer, int ncols, int nrows)
+{
+    int i, j;
+    for (i = 0; i + RBS <= nrows; i += RBS) {
+        for (j = 0; j + RBS <= ncols; j += RBS)
+            tile_real_np(matrix+(size_t)i*ncols+j, ncols, buffer+(size_t)j*nrows+i, nrows);
+        if (j < ncols) scalar_block_real(matrix, buffer, i, j, RBS, ncols-j, ncols, nrows);
+    }
+    if (i < nrows) scalar_block_real(matrix, buffer, i, 0, nrows-i, ncols, ncols, nrows);
+}
+ 
+static void xpose_into_buffer_complex(const float *matrixf, float *bufferf, int ncols, int nrows)
+{
+    const double *matrix = (const double *)matrixf;
+    double *buffer = (double *)bufferf;
+    int i, j;
+    for (i = 0; i + CBS <= nrows; i += CBS) {
+        for (j = 0; j + CBS <= ncols; j += CBS)
+            tile_complex_np(matrix+(size_t)i*ncols+j, ncols, buffer+(size_t)j*nrows+i, nrows);
+        if (j < ncols) scalar_block_complex(matrix, buffer, i, j, CBS, ncols-j, ncols, nrows);
+    }
+    if (i < nrows) scalar_block_complex(matrix, buffer, i, 0, nrows-i, ncols, ncols, nrows);
+}
+ 
+static void xpose_into_buffer_hyper(const float *matrix, float *buffer, int ncols, int nrows)
+{
+    const int TILE = 32;
+    for (int bi = 0; bi < nrows; bi += TILE) {
+        int ih = bi+TILE<nrows ? TILE : nrows-bi;
+        for (int bj = 0; bj < ncols; bj += TILE) {
+            int jw = bj+TILE<ncols ? TILE : ncols-bj;
+            for (int i = 0; i < ih; i++)
+                for (int j = 0; j < jw; j++)
+                    memcpy(buffer+((size_t)(bj+j)*nrows+(bi+i))*4,
+                           matrix+((size_t)(bi+i)*ncols+(bj+j))*4, 4*sizeof(float));
+        }
+    }
+}
+
 static int nonsymxpose(float *matrix, int ncols, int nrows, int datatype)
 {
    int                  nbytes;
@@ -439,9 +573,6 @@ static int nonsymxpose(float *matrix, int ncols, int nrows, int datatype)
                         j,
                         skip1,
                         skip2;
-   register float       *data,
-                        *tmp,
-                        *svtmp;
  
 
    skip1 = datatype;
@@ -450,68 +581,24 @@ static int nonsymxpose(float *matrix, int ncols, int nrows, int datatype)
  
    if (xposebufalloc(nbytes, BUF_ALLOCATE))
    {
+/* itrans()'s block-recursive in-place algorithm
+ * only produces correct output when BOTH dimensions 
+ * are individually powers of two  */
+	  if (!is_pow2(nrows) || !is_pow2(ncols))
+         return(ERROR);
       itrans(matrix, ncols, nrows, datatype);
       return(COMPLETE);
    }
 
-   tmp = xpose.bufferpntr;
-   svtmp = tmp;
-   data = matrix;
- 
    if (skip1 == REAL)
-   {
-      for (i = 0; i < nrows; i++)
-      {
-         tmp = svtmp;
-         for (j = 0; j < ncols; j++)
-         {
-            *tmp++ = *data++;
-            tmp += skip2;
-         }
- 
-         svtmp += skip1;
-      }
-   }
+      xpose_into_buffer_real(matrix, xpose.bufferpntr, ncols, nrows);
    else if (skip1 == COMPLEX)
-   {
-      for (i = 0; i < nrows; i++)
-      {
-         tmp = svtmp;
-         for (j = 0; j < ncols; j++)
-         {
-            *tmp++ = *data++;
-            *tmp++ = *data++;
-            tmp += skip2;
-         }
-
-         svtmp += skip1;
-      }   
-   }
+      xpose_into_buffer_complex(matrix, xpose.bufferpntr, ncols, nrows);
    else if (skip1 == HYPERCOMPLEX)
-   {
-      for (i = 0; i < nrows; i++)
-      {
-         tmp = svtmp;
-         for (j = 0; j < ncols; j++)
-         {
-            *tmp++ = *data++;
-            *tmp++ = *data++;
-            *tmp++ = *data++;
-            *tmp++ = *data++;
-            tmp += skip2;
-         }
+      xpose_into_buffer_hyper(matrix, xpose.bufferpntr, ncols, nrows);
+ 
+   memcpy(matrix, xpose.bufferpntr, nbytes);
 
-         svtmp += skip1;
-      }
-   }
- 
-   tmp = xpose.bufferpntr;
-   data = matrix;
-   ncols *= (nrows * skip1);
- 
-   for (i = 0; i < ncols; i++)
-      *data++ = *tmp++;
- 
    return(COMPLETE);
 }
 
