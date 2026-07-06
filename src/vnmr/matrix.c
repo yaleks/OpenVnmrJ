@@ -17,6 +17,8 @@
 #include <string.h>
 #include "vnmrsys.h"			/* To define UNIX (or VMS)	*/
 
+#pragma GCC optimize ("O3")
+
 #define COMPLETE	0
 #define ERROR		1
 #define REAL		1		/* real word length		*/
