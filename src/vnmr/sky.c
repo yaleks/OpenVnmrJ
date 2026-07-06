@@ -14,6 +14,7 @@
 +--------------------------------------------------------------*/
 
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 
 #ifndef M_PI
@@ -119,12 +120,30 @@ void skyrel()
 
 /* vector,vector,vector multiply, real vectors */
 /**********************************/
-void vvvrmult(float *in1, int is1, float *in2, int is2, float *out1, int os1, int n)
+void vvvrmult(float *restrict in1, int is1, float *in2, int is2, float *out1, int os1, int n)
 /**********************************/
 { register int i;
   register int is1r,is2r,os1r;
   register float *in1r,*in2r,*out1r;
 
+ if (is1 == 1 && is2 == os1)
+  {
+    switch (is2)
+    {
+      case 1:
+        for (i = 0; i < n; i++) out1[i] = in1[i] * in2[i];
+        return;
+      case 2:
+        for (i = 0; i < n; i++) out1[i * 2] = in1[i] * in2[i * 2];
+        return;
+      case 4:
+        for (i = 0; i < n; i++) out1[i * 4] = in1[i] * in2[i * 4];
+        return;
+      default:
+        break; /* uncommon stride: fall through to generic below */
+    }
+  }
+ {
   is1r = is1; is2r = is2; os1r = os1;
   in1r = in1; in2r = in2; out1r = out1;
   i = n;
@@ -132,6 +151,7 @@ void vvvrmult(float *in1, int is1, float *in2, int is2, float *out1, int os1, in
     { *out1r = *in1r * *in2r; 
       in1r += is1r; in2r += is2r; out1r += os1r; 
     }
+ }
 }
 
 
@@ -187,7 +207,7 @@ void skyadd(float *in1, float *in2, float *out, int n)
 /* sum 	 sum of the points */
 /* npnt  number of points */
 /*****************************************/
-void vrsum(float *in1, int is1, float *sum, int npnt)
+void vrsum(float *restrict in1, int is1, float *restrict sum, int npnt)
 /*****************************************/
 { register float *inptr;
   register int    inincr;
@@ -197,12 +217,23 @@ void vrsum(float *in1, int is1, float *sum, int npnt)
   inptr   = in1;
   inincr  = is1;
   total   = 0.0;
+ if (is1 == 1)
+  {
+    for (i = 0; i < npnt; i++) total += in1[i];
+  }
+  else if (is1 == 2)
+  {
+    for (i = 0; i < npnt; i++) total += in1[i * 2];
+  }
+  else
+ {
   i       = npnt;
   while (i--)
   {
     total += *inptr;
     inptr += inincr;
   }
+ }
   *sum = total;
 }
 
@@ -243,6 +274,18 @@ void vvrramp(float *in1, int is1, float *out1, int os1, float start, float delta
   register float  incr;
   register int    i;
 
+ if (is1 == 1 && os1 == 1)
+  {
+    for (i = 0; i < npnt; i++)
+      out1[i] = in1[i] + (start + (float)i * delta);
+  }
+  else if (is1 == 2 && os1 == 2)
+  {
+    for (i = 0; i < npnt; i++)
+      out1[i * 2] = in1[i * 2] + (start + (float)i * delta);
+  }
+  else
+ {
   inptr   = in1;
   inincr  = is1;
   outptr  = out1;
@@ -257,6 +300,7 @@ void vvrramp(float *in1, int is1, float *out1, int os1, float start, float delta
     inptr  += inincr;
     level  += incr;
   }
+ }
 }
 
 
@@ -442,7 +486,7 @@ void scabs(float *frompntr, int fromincr, float mult, short *topntr, int toincr,
       a = mult * srcpntr[0];
       b = mult * srcpntr[1];
       /* Don't worry about floating overflow; r should be reasonable size. */
-      r = sqrt(a * a + b * b);
+      r = sqrtf(a * a + b * b);
       *destpntr = r > 32767.499 ? sgn * MAX16INT : sgn * (short)(r + 0.5);
 
       srcpntr += fromincr;
@@ -466,18 +510,17 @@ void scabs(float *frompntr, int fromincr, float mult, short *topntr, int toincr,
 +--------------------------------------*/
 /* int	n,		number of real t1 data points/2 */
 /* 	datatype;	2 = complex    4 = hypercomplex */
-void preproc(float *datapntr, int n, int datatype)
+void preproc(float *restrict datapntr, int n, int datatype)
 {
    register int		i,
 			j;
-   register float	mult_factor;
 
-   mult_factor = 1;
    for (i = 0; i < n; i++)
    {
+	  float sign = (i & 1) ? -1.0f : 1.0f;
+      float *restrict row = datapntr + (long)i * datatype;
       for (j = 0; j < datatype; j++)
-         *datapntr++ *= mult_factor;
-      mult_factor *= (-1);
+         row[j] *= sign;
    }
 }
 
@@ -678,48 +721,21 @@ void combine(float *combinebuf, float *outp, int npoints, int datatype,
 /* Both shiftpts and npoints are numbers of complex pairs */
 void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
 {
-   register int		i;
-   register float	*endptr,
-			*sptr;
-
    if (shiftpts == 0)
       return;
    if (shiftpts > 0) /* right shift */
    {
       if (npoints > len - shiftpts)
-      {
          npoints = len - shiftpts;
-      }
-      sptr = ptr+(npoints)*2 -1;
-      endptr = ptr+(npoints+shiftpts)*2 - 1;
 
-      for (i = 0; i < npoints; i++)
-      { 
-         *endptr-- = *sptr--; 
-         *endptr-- = *sptr--; 
-      }
-      for (i = 0; i < shiftpts; i++)
-      { 
-         *endptr-- = 0.0;
-         *endptr-- = 0.0;
-      }
+	   memmove(ptr + (long)shiftpts * 2, ptr, (size_t)npoints * 2 * sizeof(float));
+       memset(ptr, 0, (size_t)shiftpts * 2 * sizeof(float));
    }
    else if (shiftpts < 0) /* left shift */
    {
-      shiftpts *= -1;
-      sptr = ptr+(shiftpts)*2;
-      endptr = ptr;
-
-      for (i = 0; i < npoints - shiftpts; i++)
-      { 
-         *endptr++ = *sptr++; 
-         *endptr++ = *sptr++; 
-      }
-      for (i = 0; i < shiftpts; i++)
-      { 
-         *endptr++ = 0.0;
-         *endptr++ = 0.0;
-      }
+      int nshift = -shiftpts;
+      memmove(ptr, ptr + (long)nshift * 2, (size_t)(npoints - nshift) * 2 * sizeof(float));
+      memset(ptr + (long)(npoints - nshift) * 2, 0, (size_t)nshift * 2 * sizeof(float));
    }
 }
 
@@ -776,30 +792,23 @@ void negateimaginary(float *data, int npoints, int datatype)
 /* inp;		pointer to 32-bit, integer FID data		*/
 /* scalefactor,	scaling factor					*/
 /* outp;	pointer to 32-bit, floating point FID data	*/
-void cnvrts32(float scalefactor, int *inp, float *outp, int npx, int lsfidx)
+void cnvrts32(float scalefactor, int *restrict inp, float *restrict outp, int npx, int lsfidx)
 {
    register int	  i;
-   register int   *datain;
-   register float *dataout;
 
 
    if (lsfidx < 0)
    {
-      datain = inp + npx;
-      dataout = outp + npx - lsfidx;
       for (i = 0; i < npx; i++)
-         *(--dataout) = scalefactor * ( (float) (*(--datain)) );
+         outp[i - lsfidx] = scalefactor * (float)inp[i];
 
       for (i = 0; i < (-1)*lsfidx; i++)
-         *(--dataout) = 0.0;
+         outp[i] = 0.0f;
    }
    else
    {
-      datain = inp + lsfidx;
-      dataout = outp;
-
       for (i = 0; i < (npx - lsfidx); i++) 
-         *dataout++ = scalefactor * ( (float) (*datain++) );
+         outp[i] = scalefactor * (float)inp[i + lsfidx];
    }
 }
 
@@ -818,29 +827,23 @@ void cnvrts32(float scalefactor, int *inp, float *outp, int npx, int lsfidx)
 /* short *inp;		pointer to 16-bit, integer FID data		*/
 /* float scalefactor,	scaling factor				*/
 /* 	*outp;		pointer to 32-bit, floating point FID data	*/
-void cnvrts16(float scalefactor, short *inp, float *outp, int npx, int lsfidx)
+void cnvrts16(float scalefactor, short *restrict inp, float *restrict outp, int npx, int lsfidx)
 {
    register int		i;
-   register short	*datain;
-   register float	*dataout;
+
 
    if (lsfidx < 0)
    {
-      datain = inp + npx;
-      dataout = outp + npx - lsfidx;
       for (i = 0; i < npx; i++)
-         *(--dataout) = scalefactor * ( (float) (*(--datain)) );
+         outp[i - lsfidx] = scalefactor * (float)inp[i];
     
       for (i = 0; i < (-1)*lsfidx; i++)
-         *(--dataout) = 0.0;
+         outp[i] = 0.0f;
    }
    else
    {
-      datain = inp + lsfidx;
-      dataout = outp;
-
       for (i = 0; i < (npx - lsfidx); i++) 
-         *dataout++ = scalefactor * ( (float) (*datain++) );
+         outp[i] = scalefactor * (float)inp[i + lsfidx];
    }
 }
 
