@@ -333,7 +333,19 @@ void vvvcmult(void *in1, int is1, void *in2, int is2, void *out1, int os1, int n
    input1 = (fcomplex *)in1;
    input2 = (fcomplex *)in2;
    output = (fcomplex *)out1;
- 
+
+   if (is1 == 1 && is2 == 0 && os1 == 1)
+    {
+      float scalar_re = input2->re, scalar_im = input2->im;
+      for (i = 0; i < npoints; i++)
+      {
+         tmp = (input1[i].re * scalar_re) - (input1[i].im * scalar_im);
+         output[i].im = (input1[i].im * scalar_re) + (input1[i].re * scalar_im);
+         output[i].re = tmp;
+      }
+      return;
+    }
+	
    for (i = 0; i < npoints; i++)
    {
       tmp = (input1->re * input2->re) - (input1->im * input2->im);
