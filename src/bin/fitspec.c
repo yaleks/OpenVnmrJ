@@ -1,10 +1,11 @@
-/* 
-* Varian Assoc.,Inc. All Rights Reserved.
-* This software contains proprietary and confidential
-* information of Varian Assoc., Inc. and its contributors.
-* Use, disclosure and reproduction is prohibited without
-* prior consent.
-*/
+/*
+ * Copyright (C) 2015  University of Oregon
+ *
+ * You may distribute under the terms of either the GNU General Public
+ * License or the Apache License, as specified in the LICENSE file.
+ *
+ * For more information, see the LICENSE file.
+ */
 
 /* fitspec.c    - fit nmr lines to gaussian and lorentzian lines */
 
@@ -34,89 +35,299 @@
 /* Original version Rene Richarz 10-4-86 for IBM PC.		*/
 /* Fixed 9-22-87 to make less agressive changes			*/
 /* 10-12-91 fixed fgauss_lorentz (see there), r.kyburz          */
+/* 07-05-26 port to GLS multifit_nlinear, yaleks          */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
+
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_multifit_nlinear.h>
+#include <gsl/gsl_blas.h>
 
 #define MAX_DATA        1024*128
 #define MAX_PARAMS      102
 #define MAXPATHL        128
 
 static int      debug = 0;
-static float    glatry[MAX_PARAMS],
-                glbeta[MAX_PARAMS];
 static float    covar[MAX_PARAMS][MAX_PARAMS];
 static float    alpha[MAX_PARAMS][MAX_PARAMS];
-static float    oneda[MAX_PARAMS][MAX_PARAMS];
 static char     do_par[MAX_PARAMS];
-static double   glochisq;
 static int      error,
                 count1,
                 count2;
 static float    sp;
 char            path[MAXPATHL];
 
-/******************************************************************/
-mrqmin(x, y, sig, ndata, a, ma, lista, mfit, covar, alpha, chisq, funcs, alamda)
-/******************************************************************/
-/* Levenberg-Marquart method curve fitting                      */
-/* See Numerical Recipes, The Art of Scientific Computing,      */
-/* Cambridge University Press, Page 526.                        */
+struct fit_data
+{
+   float          *x;		/* independent variable, ndata points  */
+   float          *y;		/* observed values, ndata points       */
+   float          *sig;		/* per-point sigma, ndata points       */
+   int             ndata;
+   float          *a;		/* full coefficient array, length ma   */
+   int             ma;
+   int            *lista;	/* indices into a[] of the mfit params */
+   int             mfit;
+};
+ 
+static void sync_full_params(const gsl_vector *p, struct fit_data *d)
+{
+   int             j;
+   int             idx;
+   float           v;
+ 
+   for (j = 0; j < d->mfit; j++)
+   {
+      idx = d->lista[j];
+      v   = (float) gsl_vector_get(p, j);
+ 
+      if (idx >= 2)			/* peak parameters only */
+      {
+	 switch ((idx - 2) % 4)
+	 {
+	    case 2:			/* width: must be positive */
+	       if (v < 0.0f)
+		  v = -v;
+	       break;
+	    case 3:			/* gfrac: must be in [0, 1] */
+	       if (v < 0.0f)
+		  v = 0.0f;
+	       else if (v > 1.0f)
+		  v = 1.0f;
+	       break;
+	    default:
+	       break;
+	 }
+      }
+      d->a[idx] = v;
+   }
+}
+ 
+/* GSL residual callback: f_i = (model(x_i) - y_i) / sigma_i */
+static int fitspec_f(const gsl_vector *p, void *params, gsl_vector *f)
+{
+   struct fit_data *d = (struct fit_data *) params;
+   int             i;
+   float           ymod;
+   float           dyda[MAX_PARAMS];
+ 
+   sync_full_params(p, d);
+   for (i = 0; i < d->ndata; i++)
+   {
+      fgauss_lorentz((double) d->x[i], d->a, &ymod, dyda, d->ma);
+      gsl_vector_set(f, i, (ymod - d->y[i]) / d->sig[i]);
+   }
+   return GSL_SUCCESS;
+}
+ 
+/* GSL Jacobian callback: J_{i,j} = (1/sigma_i) * d(model(x_i))/d(a[lista[j]]) */
+static int fitspec_df(const gsl_vector *p, void *params, gsl_matrix *J)
+{
+   struct fit_data *d = (struct fit_data *) params;
+   int             i,
+                   j;
+   float           ymod;
+   float           dyda[MAX_PARAMS];
+ 
+   sync_full_params(p, d);
+   for (i = 0; i < d->ndata; i++)
+   {
+      fgauss_lorentz((double) d->x[i], d->a, &ymod, dyda, d->ma);
+      for (j = 0; j < d->mfit; j++)
+	 gsl_matrix_set(J, i, j, dyda[d->lista[j]] / d->sig[i]);
+   }
+   return GSL_SUCCESS;
+}
 
+/******************************************************************/
+int vnmr_mrqmin(x, y, sig, ndata, a, ma, lista, mfit, chisq, maxiter)
+/******************************************************************/
+/* Levenberg-Marquardt curve fitting, using GSL's multifit_nlinear   */
+/* trust-region solver                                               */
+ 
 float           x[],
                 y[],
                 sig[];
 int             ndata;		/* input data */
 float           a[];
 int             ma;		/* coefficients */
-float           (*funcs) ();	/* function */
 int             lista[MAX_PARAMS];
 int             mfit;		/* coefficients to fit */
 double         *chisq;		/* returned chi square */
-float           covar[MAX_PARAMS][MAX_PARAMS];	/* workspace */
-float           alpha[MAX_PARAMS][MAX_PARAMS];	/* workspace */
-float          *alamda;		/* control */
-
+int             maxiter;	/* iteration cap for this call */
+ 
 {
-   return 0;
-}
-
-/**********************************************************/
-mrqcof(x, y, sig, ndata, a, ma, lista, mfit, alpha, beta, chisq, funcs)
-/**********************************************************/
-float           x[],
-                y[],
-                sig[];
-int             ndata;
-float           a[];
-int             ma;
-int             lista[MAX_PARAMS];
-int             mfit;
-float           alpha[MAX_PARAMS][MAX_PARAMS];
-float           beta[];
-double         *chisq;
-int             (*funcs) ();
-
-{
-}
-
-/*************/
-gaussj(a, n, b, m)
-/*************/
-/* Gauss Iordan Elimination */
-float           a[MAX_PARAMS][MAX_PARAMS];
-int             n;
-float           b[MAX_PARAMS][MAX_PARAMS];
-int             m;
-
-{
+   const gsl_multifit_nlinear_type *T = gsl_multifit_nlinear_trust;
+   gsl_multifit_nlinear_workspace *w;
+   gsl_multifit_nlinear_fdf fdf;
+   gsl_multifit_nlinear_parameters fdf_params =
+                       gsl_multifit_nlinear_default_parameters();
+   struct fit_data d;
+   gsl_vector     *p0;
+   gsl_matrix     *J;
+   gsl_matrix     *gcovar;
+   int             status,
+                   j,
+                   k,
+                   iter;
+   double          chi0,
+                   chi1;
+   const double    ftol = 1e-8;
+ 
+   if (mfit < 1 || ndata < 1)
+   {
+      *chisq = 1e30;
+      return 1;
+   }
+ 
+   d.x = x;
+   d.y = y;
+   d.sig = sig;
+   d.ndata = ndata;
+   d.a = a;
+   d.ma = ma;
+   d.lista = lista;
+   d.mfit = mfit;
+ 
+   p0 = gsl_vector_alloc(mfit);
+   for (j = 0; j < mfit; j++)
+      gsl_vector_set(p0, j, (double) a[lista[j]]);
+ 
+   /* Clamp the initial parameter vector to the physical domain before
+    * handing it to GSL.  */
+   for (j = 0; j < mfit; j++)
+   {
+      int             idx = lista[j];
+ 
+      if (idx >= 2)
+      {
+	 double          v = gsl_vector_get(p0, j);
+ 
+	 switch ((idx - 2) % 4)
+	 {
+	    case 2:		/* width */
+	       if (v < 0.0)
+		  gsl_vector_set(p0, j, -v);
+	       break;
+	    case 3:		/* gfrac */
+	       if (v < 0.0)
+		  gsl_vector_set(p0, j, 0.0);
+	       else if (v > 1.0)
+		  gsl_vector_set(p0, j, 1.0);
+	       break;
+	    default:
+	       break;
+	 }
+      }
+   }
+ 
+   fdf.f = fitspec_f;
+   fdf.df = fitspec_df;
+   fdf.fvv = NULL;		/* no geodesic acceleration */
+   fdf.n = ndata;
+   fdf.p = mfit;
+   fdf.params = &d;
+ 
+   fdf_params.trs = gsl_multifit_nlinear_trs_lm;
+ 
+   w = gsl_multifit_nlinear_alloc(T, &fdf_params, ndata, mfit);
+   if (w == NULL)
+   {
+      gsl_vector_free(p0);
+      *chisq = 1e30;
+      return 1;
+   }
+ 
+   gsl_multifit_nlinear_init(p0, &fdf, w);
+ 
+   /* Evaluate chi-square at the starting point to seed the delta check. */
+   {
+      gsl_vector     *res0 = gsl_multifit_nlinear_residual(w);
+ 
+      gsl_blas_ddot(res0, res0, &chi0);
+   }
+ 
+   status = GSL_SUCCESS;
+   for (iter = 0; iter < maxiter; iter++)
+   {
+      double          chi_before;
+ 
+      chi_before = chi0;
+ 
+      status = gsl_multifit_nlinear_iterate(w);
+ 
+      /* Sync GSL's (unconstrained) position into d->a[], applying the
+       * soft clamps to glatry[] each step. */
+      sync_full_params(gsl_multifit_nlinear_position(w), &d);
+ 
+      /* Recompute chi-square from the (clamped) a[] rather than
+       * trusting GSL's internal residual vector, which reflects the
+       * unclamped position. */
+      {
+	 int             nn;
+	 float           ymod;
+	 float           dyda[MAX_PARAMS];
+	 double          sum = 0.0;
+ 
+	 for (nn = 0; nn < ndata; nn++)
+	 {
+	    fgauss_lorentz((double) x[nn], d.a, &ymod, dyda, ma);
+	    sum += ((ymod - y[nn]) / sig[nn]) * ((ymod - y[nn]) / sig[nn]);
+	 }
+	 chi1 = sum;
+      }
+ 
+      /* count2: every trial step.  count1: non-improving steps. */
+      count2 = count2 + 1;
+      if (status == GSL_ENOPROG || chi1 >= chi_before)
+	 count1 = count1 + 1;
+      chi0 = chi1;
+ 
+      if (status != GSL_SUCCESS && status != GSL_ENOPROG)
+	 break;		/* genuine solver failure */
+ 
+      /* Convergence: chisq changed by less than ftol relative, AND
+       * we have taken at least a handful of steps so we don't quit on
+       * a deceptively flat starting point. */
+      if (iter >= 5 &&
+	  fabs(chi_before - chi1) < ftol * (1.0 + chi_before))
+	 break;
+   }
+ 
+   J = gsl_multifit_nlinear_jac(w);
+   gcovar = gsl_matrix_alloc(mfit, mfit);
+   gsl_multifit_nlinear_covar(J, 0.0, gcovar);
+ 
+   /* push the fitted values back into the caller's full parameter array */
+   sync_full_params(gsl_multifit_nlinear_position(w), &d);
+ 
+   /* expand the mfit x mfit GSL covariance into the full ma x ma
+    * "covar" array indexed by the original parameter numbering, so
+    * that any later reporting code keeps working unchanged */
+   for (j = 0; j < ma; j++)
+      for (k = 0; k < ma; k++)
+	 covar[j][k] = 0.0;
+   for (j = 0; j < mfit; j++)
+      for (k = 0; k < mfit; k++)
+	 covar[lista[j]][lista[k]] = (float) gsl_matrix_get(gcovar, j, k);
+ 
+   *chisq = chi1;
+ 
+   gsl_matrix_free(gcovar);
+   gsl_multifit_nlinear_free(w);
+   gsl_vector_free(p0);
+ 
+   if (status != GSL_SUCCESS && status != GSL_ENOPROG)
+      return 1;
    return 0;
 }
 
 /**************************/
-fgauss_lorentz(x, a, y, dyda, na)
+void fgauss_lorentz(double x, float *a, float *y, float *dyda, int na);
 /**************************/
 /* calculate y at point x for a sum of lorentzian and gaussian functions  */
 /* and a linear drift correction, as well as derivative of this function */
@@ -171,17 +382,8 @@ int             na;
    }
 }
 
-/*************************/
-covsrt(covar, ma, lista, mfit)
-/*************************/
-float           covar[MAX_PARAMS][MAX_PARAMS];
-int             lista[MAX_PARAMS];
-
-{
-}
-
 /*********************/
-readdata(x, y, sig, ndata)
+int readdata(x, y, sig, ndata)
 /*********************/
 float           x[],
                 y[],
@@ -189,7 +391,6 @@ float           x[],
 int            *ndata;
 
 {
-   FILE           *fopen();
    FILE           *inputfile;
    int             i,
                    s;
@@ -279,7 +480,7 @@ int            *ndata;
 }
 
 /*************************/
-readparams(a, lista, ma, mfit)
+int readparams(a, lista, ma, mfit)
 /*************************/
 float           a[MAX_PARAMS];
 int             lista[MAX_PARAMS];
@@ -287,7 +488,6 @@ int            *ma,
                *mfit;
 
 {
-   FILE           *fopen();
    FILE           *inputfile;
    int             i,
                    r,
@@ -506,13 +706,12 @@ int            *ma,
 }
 
 /***************/
-writeparams(a, ma)
+int writeparams(a, ma)
 /***************/
 float           a[MAX_PARAMS];
 int             ma;
 
 {
-   FILE           *fopen();
    FILE           *outputfile;
    int             i,
                    r,
@@ -548,11 +747,10 @@ int             ma;
 }
 
 /****************/
-writestatus(chisq)
+int writestatus(chisq)
 /****************/
 double          chisq;
 {
-   FILE           *fopen();
    FILE           *outputfile;
    char            filename[MAXPATHL];
 
@@ -575,10 +773,11 @@ double          chisq;
       printf("cannot create 'fitspec.stat' file\n");
       return 1;
    }
+ return 0;
 }
 
 /*************/
-main(argc, argv)
+int main(argc, argv)
 /*************/
 int             argc;
 char           *argv[];
@@ -592,15 +791,10 @@ char           *argv[];
                    mfit;
    float           a[MAX_PARAMS];
    int             lista[MAX_PARAMS];
-   double          chisq,
-                   lastchisq;
-   float           alamda;
+   double          chisq;
    int             i;
-   int             fgauss_lorentz();
    char            filename[MAXPATHL];
 
-   fprintf(stderr,"OpenVnmrJ verison of fitspec is not available\n");
-   exit(EXIT_SUCCESS);
    path[0] = 0;
 #ifdef VMS
    if (argc > 1)
@@ -635,7 +829,6 @@ char           *argv[];
    count1 = 0;
    count2 = 0;
    chisq = 1e30;
-   alamda = -1.0;
    if (readdata(x, y, sig, &ndata))
    {
       writestatus(chisq);
@@ -646,24 +839,11 @@ char           *argv[];
       writestatus(chisq);
       return 1;
    }
-   do
+
+   if (vnmr_mrqmin(x, y, sig, ndata, a, ma, lista, mfit, &chisq, 200))
    {
-      lastchisq = chisq;
-      if (mrqmin(x, y, sig, ndata, a, ma, lista, mfit, covar, alpha,
-		 &chisq, fgauss_lorentz, &alamda))
-      {
-	 if (debug)
-	    printf("ERROR C\n");
-	 writestatus(chisq);
-	 return 1;
-      }
-   }
-   while ((fabs((double) (chisq - lastchisq) / chisq) > 1e-4) ||
-	  ((count1 <= 5) && (count2 <= 10)));
-   alamda = 0.0;
-   if (mrqmin(x, y, sig, ndata, a, ma, lista, mfit, covar, alpha,
-	      &chisq, fgauss_lorentz, &alamda))
-   {
+      if (debug)
+	 printf("ERROR C\n");
       writestatus(chisq);
       return 1;
    }
