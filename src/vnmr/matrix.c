@@ -371,8 +371,106 @@ int xposebufalloc(int nbytes, int bufstatus)
 
    return(COMPLETE);
 }   
+  
+/* Unified SIMD-friendly tile-transpose template */
+#ifndef RBS
+#define RBS 16  /* REAL tile size (elements per side)  */
+#endif
+#ifndef CBS
+#define CBS 16  /* COMPLEX tile size */
+#endif
+#ifndef HBS
+#define HBS 8   /* HYPERCOMPLEX tile size */
+#endif
+
+#define DEFINE_TILE_XPOSE(SUFFIX, ELEM_T, BS)                                \
+static inline __attribute__((always_inline))                                 \
+void t##SUFFIX(const ELEM_T s[BS][BS], ELEM_T d[BS][BS])                     \
+{                                                                             \
+   for (int i = 0; i < BS; i++)                                              \
+      for (int j = 0; j < BS; j++)                                           \
+         d[j][i] = s[i][j];                                                  \
+}                                                                             \
+static inline __attribute__((always_inline))                                 \
+void tile_##SUFFIX(const ELEM_T *src, int src_ld, ELEM_T *dst, int dst_ld)   \
+{                                                                             \
+   ELEM_T in[BS][BS], out[BS][BS];                                           \
+   for (int i = 0; i < BS; i++)                                              \
+      memcpy(in[i], src + (size_t)i * src_ld, BS * sizeof(ELEM_T));          \
+   t##SUFFIX(in, out);                                                       \
+   for (int i = 0; i < BS; i++)                                              \
+      memcpy(dst + (size_t)i * dst_ld, out[i], BS * sizeof(ELEM_T));         \
+}
  
+#define DEFINE_SCALAR_BLOCK(SUFFIX, ELEM_T)                                  \
+static void scalar_block_##SUFFIX(const ELEM_T *src, ELEM_T *dst,            \
+                                   int bi, int bj, int bh, int bw,           \
+                                   int src_cols, int dst_cols)               \
+{                                                                             \
+   for (int i = 0; i < bh; i++)                                              \
+      for (int j = 0; j < bw; j++)                                           \
+         dst[(bj+j)*dst_cols + (bi+i)] = src[(bi+i)*src_cols + (bj+j)];      \
+}
  
+#define DEFINE_INPLACE_SQUARE(SUFFIX, ELEM_T, BS)                            \
+static void symxpose_##SUFFIX(ELEM_T *mat, int n)                            \
+{                                                                             \
+   int i, j;                                                                 \
+   for (i = 0; i + BS <= n; i += BS) {                                       \
+      tile_##SUFFIX(mat+(size_t)i*n+i, n, mat+(size_t)i*n+i, n);             \
+      for (j = i + BS; j + BS <= n; j += BS) {                               \
+         ELEM_T a_in[BS][BS], a_out[BS][BS], b_in[BS][BS], b_out[BS][BS];    \
+         for (int k = 0; k < BS; k++) {                                      \
+            memcpy(a_in[k], mat+(size_t)(i+k)*n+j, BS*sizeof(ELEM_T));       \
+            memcpy(b_in[k], mat+(size_t)(j+k)*n+i, BS*sizeof(ELEM_T));       \
+         }                                                                   \
+         t##SUFFIX(a_in, a_out); t##SUFFIX(b_in, b_out);                     \
+         for (int k = 0; k < BS; k++) {                                      \
+            memcpy(mat+(size_t)(i+k)*n+j, b_out[k], BS*sizeof(ELEM_T));      \
+            memcpy(mat+(size_t)(j+k)*n+i, a_out[k], BS*sizeof(ELEM_T));      \
+         }                                                                   \
+      }                                                                      \
+   }                                                                         \
+   for (int r = 0; r < n; r++) {                                             \
+      int cstart = (r >= i) ? 0 : i;                                         \
+      for (int c = (r+1 > cstart ? r+1 : cstart); c < n; c++) {              \
+         ELEM_T tmp_ = mat[r*n+c]; mat[r*n+c] = mat[c*n+r]; mat[c*n+r] = tmp_;\
+      }                                                                      \
+   }                                                                         \
+}
+ 
+#define DEFINE_OUTOFPLACE(SUFFIX, ELEM_T, BS)                                \
+static void xpose_into_buffer_##SUFFIX(const ELEM_T *matrix, ELEM_T *buffer, \
+                                        int ncols, int nrows)                \
+{                                                                             \
+   int i, j;                                                                 \
+   for (i = 0; i + BS <= nrows; i += BS) {                                   \
+      for (j = 0; j + BS <= ncols; j += BS)                                  \
+         tile_##SUFFIX(matrix+(size_t)i*ncols+j, ncols,                      \
+                        buffer+(size_t)j*nrows+i, nrows);                    \
+      if (j < ncols)                                                         \
+         scalar_block_##SUFFIX(matrix, buffer, i, j, BS, ncols-j, ncols, nrows); \
+   }                                                                         \
+   if (i < nrows)                                                            \
+      scalar_block_##SUFFIX(matrix, buffer, i, 0, nrows-i, ncols, ncols, nrows); \
+}
+ 
+DEFINE_TILE_XPOSE(real,  float,        RBS)
+DEFINE_TILE_XPOSE(cplx,  fcomplex,     CBS)
+DEFINE_TILE_XPOSE(hyper, hypercomplex, HBS)
+ 
+DEFINE_SCALAR_BLOCK(real,  float)
+DEFINE_SCALAR_BLOCK(cplx,  fcomplex)
+DEFINE_SCALAR_BLOCK(hyper, hypercomplex)
+ 
+DEFINE_INPLACE_SQUARE(real,  float,        RBS)
+DEFINE_INPLACE_SQUARE(cplx,  fcomplex,     CBS)
+DEFINE_INPLACE_SQUARE(hyper, hypercomplex, HBS)
+ 
+DEFINE_OUTOFPLACE(real,  float,        RBS)
+DEFINE_OUTOFPLACE(cplx,  fcomplex,     CBS)
+DEFINE_OUTOFPLACE(hyper, hypercomplex, HBS)
+
 /*-----------------------------------------------
 |                                               |
 |                  symxpose()/3                 |
@@ -383,103 +481,12 @@ int xposebufalloc(int nbytes, int bufstatus)
 |                                               |
 +----------------------------------------------*/
 
-/* SIMD-friendly blocks for symxpose's inner loop */
-#define RBS 8
-#define CBS 4
- 
-static inline __attribute__((always_inline)) void t8x8(const float s[RBS][RBS], float d[RBS][RBS])
-{ for (int i=0;i<RBS;i++) for (int j=0;j<RBS;j++) d[j][i]=s[i][j]; }
- 
-static inline __attribute__((always_inline)) void t4x4(const double s[CBS][CBS], double d[CBS][CBS])
-{ for (int i=0;i<CBS;i++) for (int j=0;j<CBS;j++) d[j][i]=s[i][j]; }
- 
-static void symxpose_real(float *mat, int n)
-{
-   int i, j;
-   for (i = 0; i + RBS <= n; i += RBS) {
-      float in[RBS][RBS], out[RBS][RBS];
-      for (int k=0;k<RBS;k++) memcpy(in[k], mat+(size_t)(i+k)*n+i, RBS*sizeof(float));
-      t8x8(in, out);
-      for (int k=0;k<RBS;k++) memcpy(mat+(size_t)(i+k)*n+i, out[k], RBS*sizeof(float));
-      for (j = i + RBS; j + RBS <= n; j += RBS) {
-         float a_in[RBS][RBS], a_out[RBS][RBS], b_in[RBS][RBS], b_out[RBS][RBS];
-         for (int k=0;k<RBS;k++) {
-            memcpy(a_in[k], mat+(size_t)(i+k)*n+j, RBS*sizeof(float));
-            memcpy(b_in[k], mat+(size_t)(j+k)*n+i, RBS*sizeof(float));
-         }
-         t8x8(a_in, a_out); t8x8(b_in, b_out);
-         for (int k=0;k<RBS;k++) {
-            memcpy(mat+(size_t)(i+k)*n+j, b_out[k], RBS*sizeof(float));
-            memcpy(mat+(size_t)(j+k)*n+i, a_out[k], RBS*sizeof(float));
-         }
-      }
-   }
-   for (int r = 0; r < n; r++) {
-      int cstart = (r >= i) ? 0 : i;
-      for (int c = (r+1 > cstart ? r+1 : cstart); c < n; c++) {
-         float t = mat[r*n+c]; mat[r*n+c] = mat[c*n+r]; mat[c*n+r] = t;
-      }
-   }
-}
- 
-static void symxpose_complex(float *matf, int n)
-{
-   double *mat = (double *)matf;
-   int i, j;
-   for (i = 0; i + CBS <= n; i += CBS) {
-      double in[CBS][CBS], out[CBS][CBS];
-      for (int k=0;k<CBS;k++) memcpy(in[k], mat+(size_t)(i+k)*n+i, CBS*sizeof(double));
-      t4x4(in, out);
-      for (int k=0;k<CBS;k++) memcpy(mat+(size_t)(i+k)*n+i, out[k], CBS*sizeof(double));
-      for (j = i + CBS; j + CBS <= n; j += CBS) {
-         double a_in[CBS][CBS], a_out[CBS][CBS], b_in[CBS][CBS], b_out[CBS][CBS];
-         for (int k=0;k<CBS;k++) {
-            memcpy(a_in[k], mat+(size_t)(i+k)*n+j, CBS*sizeof(double));
-            memcpy(b_in[k], mat+(size_t)(j+k)*n+i, CBS*sizeof(double));
-         }
-         t4x4(a_in, a_out); t4x4(b_in, b_out);
-         for (int k=0;k<CBS;k++) {
-            memcpy(mat+(size_t)(i+k)*n+j, b_out[k], CBS*sizeof(double));
-            memcpy(mat+(size_t)(j+k)*n+i, a_out[k], CBS*sizeof(double));
-         }
-      }
-   }
-   for (int r = 0; r < n; r++) {
-      int cstart = (r >= i) ? 0 : i;
-      for (int c = (r+1 > cstart ? r+1 : cstart); c < n; c++) {
-         double t = mat[r*n+c]; mat[r*n+c] = mat[c*n+r]; mat[c*n+r] = t;
-      }
-   }
-}
- 
-static void symxpose_hyper(float *mat, int n)
-{
-   const int TILE = 32;
-   for (int bi = 0; bi < n; bi += TILE) {
-      int ih = bi+TILE<n ? TILE : n-bi;
-      for (int bj = bi; bj < n; bj += TILE) {
-         int jw = bj+TILE<n ? TILE : n-bj;
-         for (int i = 0; i < ih; i++) {
-            int j0 = (bj==bi) ? i+1 : 0;
-            for (int j = j0; j < jw; j++) {
-               int r = bi+i, c = bj+j;
-               if (r >= c && bj == bi) continue;
-               float tmp[4];
-               memcpy(tmp, mat+((size_t)r*n+c)*4, 16);
-               memcpy(mat+((size_t)r*n+c)*4, mat+((size_t)c*n+r)*4, 16);
-               memcpy(mat+((size_t)c*n+r)*4, tmp, 16);
-            }
-         }
-      }
-   }
-}
-
 /* npoints      number of "datatype" points			*/
 /* datatype     1 = real    2 = complex    4 = hypercomplex	*/
 static void symxpose(float *matrix, int npoints, int datatype)
 {
-  if (datatype == HYPERCOMPLEX)      symxpose_hyper(matrix, npoints);
-  else if (datatype == COMPLEX)      symxpose_complex(matrix, npoints);
+  if (datatype == HYPERCOMPLEX)      symxpose_hyper((hypercomplex *)matrix, npoints);
+  else if (datatype == COMPLEX)      symxpose_cplx((fcomplex *)matrix, npoints);
   else if (datatype == REAL)         symxpose_real(matrix, npoints);
 }
 
@@ -500,74 +507,6 @@ static int is_pow2(int n)
 |                                               |
 +----------------------------------------------*/
 
-/* SIMD-friendly blocks for nonsymxpose's copy-into-buffer */
-static inline __attribute__((always_inline)) void tile_real_np(const float *src, int src_ld, float *dst, int dst_ld)
-{
-    float in[RBS][RBS], out[RBS][RBS];
-    for (int i=0;i<RBS;i++) memcpy(in[i], src+(size_t)i*src_ld, RBS*sizeof(float));
-    t8x8(in, out);
-    for (int i=0;i<RBS;i++) memcpy(dst+(size_t)i*dst_ld, out[i], RBS*sizeof(float));
-}
- 
-static inline __attribute__((always_inline)) void tile_complex_np(const double *src, int src_ld, double *dst, int dst_ld)
-{
-    double in[CBS][CBS], out[CBS][CBS];
-    for (int i=0;i<CBS;i++) memcpy(in[i], src+(size_t)i*src_ld, CBS*sizeof(double));
-    t4x4(in, out);
-    for (int i=0;i<CBS;i++) memcpy(dst+(size_t)i*dst_ld, out[i], CBS*sizeof(double));
-}
- 
-static void scalar_block_real(const float *src, float *dst, int bi, int bj, int bh, int bw, int src_cols, int dst_cols)
-{
-    for (int i=0;i<bh;i++) for (int j=0;j<bw;j++)
-        dst[(bj+j)*dst_cols+(bi+i)] = src[(bi+i)*src_cols+(bj+j)];
-}
- 
-static void scalar_block_complex(const double *src, double *dst, int bi, int bj, int bh, int bw, int src_cols, int dst_cols)
-{
-    for (int i=0;i<bh;i++) for (int j=0;j<bw;j++)
-        dst[(bj+j)*dst_cols+(bi+i)] = src[(bi+i)*src_cols+(bj+j)];
-}
- 
-static void xpose_into_buffer_real(const float *matrix, float *buffer, int ncols, int nrows)
-{
-    int i, j;
-    for (i = 0; i + RBS <= nrows; i += RBS) {
-        for (j = 0; j + RBS <= ncols; j += RBS)
-            tile_real_np(matrix+(size_t)i*ncols+j, ncols, buffer+(size_t)j*nrows+i, nrows);
-        if (j < ncols) scalar_block_real(matrix, buffer, i, j, RBS, ncols-j, ncols, nrows);
-    }
-    if (i < nrows) scalar_block_real(matrix, buffer, i, 0, nrows-i, ncols, ncols, nrows);
-}
- 
-static void xpose_into_buffer_complex(const float *matrixf, float *bufferf, int ncols, int nrows)
-{
-    const double *matrix = (const double *)matrixf;
-    double *buffer = (double *)bufferf;
-    int i, j;
-    for (i = 0; i + CBS <= nrows; i += CBS) {
-        for (j = 0; j + CBS <= ncols; j += CBS)
-            tile_complex_np(matrix+(size_t)i*ncols+j, ncols, buffer+(size_t)j*nrows+i, nrows);
-        if (j < ncols) scalar_block_complex(matrix, buffer, i, j, CBS, ncols-j, ncols, nrows);
-    }
-    if (i < nrows) scalar_block_complex(matrix, buffer, i, 0, nrows-i, ncols, ncols, nrows);
-}
- 
-static void xpose_into_buffer_hyper(const float *matrix, float *buffer, int ncols, int nrows)
-{
-    const int TILE = 32;
-    for (int bi = 0; bi < nrows; bi += TILE) {
-        int ih = bi+TILE<nrows ? TILE : nrows-bi;
-        for (int bj = 0; bj < ncols; bj += TILE) {
-            int jw = bj+TILE<ncols ? TILE : ncols-bj;
-            for (int i = 0; i < ih; i++)
-                for (int j = 0; j < jw; j++)
-                    memcpy(buffer+((size_t)(bj+j)*nrows+(bi+i))*4,
-                           matrix+((size_t)(bi+i)*ncols+(bj+j))*4, 4*sizeof(float));
-        }
-    }
-}
-
 static int nonsymxpose(float *matrix, int ncols, int nrows, int datatype)
 {
    int                  nbytes;
@@ -576,10 +515,7 @@ static int nonsymxpose(float *matrix, int ncols, int nrows, int datatype)
                         skip1,
                         skip2;
  
-
-   skip1 = datatype;
-   skip2 = skip1 * (nrows - 1);
-   nbytes = sizeof(float) * nrows * ncols * skip1;
+   nbytes = sizeof(float) * nrows * ncols * datatype;
  
    if (xposebufalloc(nbytes, BUF_ALLOCATE))
    {
@@ -592,12 +528,12 @@ static int nonsymxpose(float *matrix, int ncols, int nrows, int datatype)
       return(COMPLETE);
    }
 
-   if (skip1 == REAL)
+   if (datatype == REAL)
       xpose_into_buffer_real(matrix, xpose.bufferpntr, ncols, nrows);
-   else if (skip1 == COMPLEX)
-      xpose_into_buffer_complex(matrix, xpose.bufferpntr, ncols, nrows);
-   else if (skip1 == HYPERCOMPLEX)
-      xpose_into_buffer_hyper(matrix, xpose.bufferpntr, ncols, nrows);
+   else if (datatype == COMPLEX)
+      xpose_into_buffer_cplx((const fcomplex *)matrix, (fcomplex *)xpose.bufferpntr, ncols, nrows);
+   else if (datatype == HYPERCOMPLEX)
+      xpose_into_buffer_hyper((const hypercomplex *)matrix, (hypercomplex *)xpose.bufferpntr, ncols, nrows);
  
    memcpy(matrix, xpose.bufferpntr, nbytes);
 
