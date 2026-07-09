@@ -89,6 +89,7 @@ int GetScaleFactor(const char *path, float *minPixel, float *maxPixel)
 	}
 
 	printf("%d Files processed for min and max pixel values...\n", nImageFiles);
+	return 0;
 }
 
 int GetFDFMinMax(char *path, float *fileMin, float *fileMax)
