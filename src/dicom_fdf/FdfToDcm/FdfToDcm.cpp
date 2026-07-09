@@ -80,8 +80,8 @@ int main(int argc,char **argv)
         char                            syscmd[256];
         char                            stdid[256];
         char                            sha1[64];
-        char                            uidpbuf[NSHA1];
-        char                            uidfbuf[NSHA1];
+        char                            uidpbuf[NSHA1 + 1];
+        char                            uidfbuf[NSHA1 + 1];
         char                            tempbuf[256];
 
 	int				i,j;
@@ -1041,7 +1041,7 @@ static void makesha1uid(char *filepath, char *filename, char *uidbuf)
   j=0;
   for(i=0;i<NSHA1;i++)
     {
-      if((isdigit(sha1[i])) && (sha1[i] != '0'))
+      if((isdigit(sha1[i])) && (sha1[i] != '0') && (j < NSHA1 - 1))
 	uidbuf[j++]=sha1[i];
     }
   uidbuf[j]='\0';
