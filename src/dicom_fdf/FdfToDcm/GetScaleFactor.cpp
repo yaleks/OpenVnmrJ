@@ -156,6 +156,8 @@ int GetFDFMinMax(char *path, float *fileMin, float *fileMax)
 	printf("File: %s - Min Pixel: %f\n", path, minPixel);
 	printf("File: %s - Max Pixel: %f\n", path, maxPixel);
 
+	free(pixelBuf);
+
 	if(minPixel < *fileMin) *fileMin = minPixel;
 	if(maxPixel > *fileMax) *fileMax = maxPixel;
 
