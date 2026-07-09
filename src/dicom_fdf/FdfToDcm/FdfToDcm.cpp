@@ -414,6 +414,7 @@ int main(int argc,char **argv)
 			}
 			printf("Scaling factor: %f\n", scaleFactor);
 			fclose(fd);
+			free(pixelBuf);
 			printf("Pixel bytes written: %d\n", pixels);
 		}	// End if(isfdf)
 		else
