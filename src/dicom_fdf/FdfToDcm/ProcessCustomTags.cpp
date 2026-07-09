@@ -105,11 +105,12 @@ int ProcessCustomTags(char *filepath, char *procparPath, FILE *fdf_file, class M
 			// Check for values that are tied to procpar.  Indicated by '=' leading char
 			if(valuestr[0] == '=')
 			  {
-			    if(FindFDFValue(fdf_file, ++valuestr, str1) ==0)
+			      ++valuestr;
+				  if(FindFDFValue(fdf_file, valuestr, str1) ==0)
 			      {
 				strcpy(valuestr, str1);
 			      }
-			    else if(FindProcparValue(procparPath, ++valuestr, str1) == 0)
+			    else if(FindProcparValue(procparPath, valuestr, str1) == 0)
 			      {					
 				strcpy(valuestr, str1);
 			      }
@@ -126,9 +127,11 @@ int ProcessCustomTags(char *filepath, char *procparPath, FILE *fdf_file, class M
 			valuestr = NULL;
 			break;
 		default:
+			char *end = str + sizeof(str) - 1;   // last valid byte in the line buffer
 			cptr = valuestr;
-			while(!isspace(*cptr++));
-			*(cptr - 1) = '\0';
+			while(cptr < end && *cptr != '\0' && !isspace((unsigned char)*cptr))
+				cptr++;
+			*cptr = '\0';
 			break;
 		}
 		if(valuestr == NULL) continue;
@@ -392,10 +395,11 @@ int	FindProcparValue(char *procparPath, char *fieldName, char *retptr)
 
 						for(k = k ; k < strlen(str1) ; k++)
 						{
-							str2[l++]=str1[k]; /* copy to str2 */
+							if(l < (int)sizeof(str2) - 1)
+								str2[l++]=str1[k]; /* copy to str2 */
 						}
 
-						if(str1[strlen(str1)-1] != '"') str2[l++]=' '; /* add white space */
+						if(str1[strlen(str1)-1] != '"' && l < (int)sizeof(str2) - 1) str2[l++]=' '; /* add white space */
 					} while(str1[strlen(str1)-1] != '"');
 
 					str2[--l]=0; /* NULL terminate */
@@ -476,5 +480,6 @@ int	FindProcparValue(char *procparPath, char *fieldName, char *retptr)
 				break;
 		}
 	}
+	return 0;
 }
 
