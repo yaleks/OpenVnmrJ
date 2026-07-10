@@ -389,6 +389,7 @@ int	FindProcparValue(char *procparPath, char *fieldName, char *retptr)
 						if(fscanf(procparfd, "%s", str1) != 1)
 						{
 							fprintf(stderr, "Error reading string values...\n");
+							break;
 						}
 						k = 0;
 						if(str1[0] == '"') k++; /* skip leading quote */
