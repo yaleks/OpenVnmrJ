@@ -84,7 +84,7 @@ extern int convertFdfFieldToTag(char *fieldType, char *fieldName,
 		}
 	}
 	// If we didn't find a matching entry, return an error
-	if(fdfInput[i].name == NULL)
+	if(fdfInput[i].name[0] == '\0')
 	{
 		printf("Uknown field found, ignoring...\n");
 		return 1;
