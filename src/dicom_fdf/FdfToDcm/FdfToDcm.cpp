@@ -312,6 +312,8 @@ int main(int argc,char **argv)
 				if(fread(&c, 1, 1, fd) != 1)
 				{
 					fprintf(stderr, "Error locating end of FDF header!!", errno);
+					fclose(fd);
+					exit(1);
 				}
 			}
 
@@ -925,9 +927,14 @@ int main(int argc,char **argv)
 			{
 				perror("stat");
 			}
-			int tagSize = strlen(PROCPARTAGHEADER);
+			size_t tagSize = strlen(PROCPARTAGHEADER);
 			tagSize += strlen(PROCPARTAGFOOTER);
-			tagSize += sb.st_size;
+			tagSize += (size_t)sb.st_size;
+			if(sb.st_size < 0)
+			{
+				fprintf(stderr, "Invalid procpar file size, private tag will not be included!\n");
+				return 1;
+			}
 			char *privateBuf = (char *)malloc(tagSize + 4);
 			bzero(privateBuf, tagSize + 4);
 
