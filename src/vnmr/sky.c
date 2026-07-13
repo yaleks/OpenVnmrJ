@@ -735,21 +735,64 @@ void combine(float *combinebuf, float *outp, int npoints, int datatype,
 /* Both shiftpts and npoints are numbers of complex pairs */
 void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
 {
+   register int		i;
+   register float	*endptr,
+			*sptr;
+	
    if (shiftpts == 0)
       return;
    if (shiftpts > 0) /* right shift */
    {
+	if (len < 8)
+	{
+	  sptr = ptr+(npoints)*2 -1;
+      endptr = ptr+(npoints+shiftpts)*2 - 1;
+
+      for (i = 0; i < npoints; i++)
+      { 
+         *endptr-- = *sptr--; 
+         *endptr-- = *sptr--; 
+      }
+      for (i = 0; i < shiftpts; i++)
+      { 
+         *endptr-- = 0.0;
+         *endptr-- = 0.0;
+      }
+	}
+	 else
+	{
       if (npoints > len - shiftpts)
          npoints = len - shiftpts;
 
 	   memmove(ptr + (long)shiftpts * 2, ptr, (size_t)npoints * 2 * sizeof(float));
        memset(ptr, 0, (size_t)shiftpts * 2 * sizeof(float));
+	}
    }
    else if (shiftpts < 0) /* left shift */
    {
+	if (len < 8)
+	{
+      shiftpts *= -1;
+      sptr = ptr+(shiftpts)*2;
+      endptr = ptr;
+
+      for (i = 0; i < npoints - shiftpts; i++)
+      { 
+         *endptr++ = *sptr++; 
+         *endptr++ = *sptr++; 
+      }
+      for (i = 0; i < shiftpts; i++)
+      { 
+         *endptr++ = 0.0;
+         *endptr++ = 0.0;
+      }
+	}
+	else
+	{
       int nshift = -shiftpts;
       memmove(ptr, ptr + (long)nshift * 2, (size_t)(npoints - nshift) * 2 * sizeof(float));
       memset(ptr + (long)(npoints - nshift) * 2, 0, (size_t)nshift * 2 * sizeof(float));
+	}
    }
 }
 
