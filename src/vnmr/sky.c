@@ -209,6 +209,7 @@ void skyadd(float *in1, float *in2, float *out, int n)
 /* sum 	 sum of the points */
 /* npnt  number of points */
 /*****************************************/
+__attribute__((optimize("associative-math","no-signed-zeros","no-trapping-math")))
 void vrsum(float *restrict in1, int is1, float *restrict sum, int npnt)
 /*****************************************/
 { register float *inptr;
