@@ -746,6 +746,10 @@ void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
    {
 	if (len < 8)
 	{
+      if (npoints > len - shiftpts)
+      {
+         npoints = len - shiftpts;
+      }
 	  sptr = ptr+(npoints)*2 -1;
       endptr = ptr+(npoints+shiftpts)*2 - 1;
 
