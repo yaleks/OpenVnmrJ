@@ -534,7 +534,7 @@ void preproc(float *restrict datapntr, int n, int datatype)
    {
       for (i = 0; i < n; i++)
       {
-         float sign = (i & 1) ? -1.0f : 1.0f;
+         float sign = 1.0f - 2.0f * (float)(i & 1);
          datapntr[i*2]   *= sign;
          datapntr[i*2+1] *= sign;
       }
@@ -543,7 +543,7 @@ void preproc(float *restrict datapntr, int n, int datatype)
    {
       for (i = 0; i < n; i++)
       {
-         float sign = (i & 1) ? -1.0f : 1.0f;
+         float sign = 1.0f - 2.0f * (float)(i & 1);
          datapntr[i*4]   *= sign;
          datapntr[i*4+1] *= sign;
          datapntr[i*4+2] *= sign;
@@ -554,7 +554,7 @@ void preproc(float *restrict datapntr, int n, int datatype)
    {
     for (i = 0; i < n; i++)
     {
-	  float sign = (i & 1) ? -1.0f : 1.0f;
+	  float sign = 1.0f - 2.0f * (float)(i & 1);
       float *restrict row = datapntr + (long)i * datatype;
       for (j = 0; j < datatype; j++)
          row[j] *= sign;
