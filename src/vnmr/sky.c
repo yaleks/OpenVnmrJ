@@ -767,12 +767,10 @@ void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
       return;
    if (shiftpts > 0) /* right shift */
    {
-	if (len < 8)
-	{
-      if (npoints > len - shiftpts)
-      {
+	if (npoints > len - shiftpts)
          npoints = len - shiftpts;
-      }
+	if (npoints < 16)
+	{
 	  sptr = ptr+(npoints)*2 -1;
       endptr = ptr+(npoints+shiftpts)*2 - 1;
 
@@ -789,16 +787,13 @@ void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
 	}
 	 else
 	{
-      if (npoints > len - shiftpts)
-         npoints = len - shiftpts;
-
 	   memmove(ptr + (long)shiftpts * 2, ptr, (size_t)npoints * 2 * sizeof(float));
        memset(ptr, 0, (size_t)shiftpts * 2 * sizeof(float));
 	}
    }
    else if (shiftpts < 0) /* left shift */
    {
-	if (len < 8)
+	if (npoints + shiftpts < 16)
 	{
       shiftpts *= -1;
       sptr = ptr+(shiftpts)*2;
