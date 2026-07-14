@@ -530,12 +530,35 @@ void preproc(float *restrict datapntr, int n, int datatype)
    register int		i,
 			j;
 
-   for (i = 0; i < n; i++)
+   if (datatype == 2)
    {
+      for (i = 0; i < n; i++)
+      {
+         float sign = (i & 1) ? -1.0f : 1.0f;
+         datapntr[i*2]   *= sign;
+         datapntr[i*2+1] *= sign;
+      }
+   }
+   else if (datatype == 4)
+   {
+      for (i = 0; i < n; i++)
+      {
+         float sign = (i & 1) ? -1.0f : 1.0f;
+         datapntr[i*4]   *= sign;
+         datapntr[i*4+1] *= sign;
+         datapntr[i*4+2] *= sign;
+         datapntr[i*4+3] *= sign;
+      }
+   }
+   else
+   {
+    for (i = 0; i < n; i++)
+    {
 	  float sign = (i & 1) ? -1.0f : 1.0f;
       float *restrict row = datapntr + (long)i * datatype;
       for (j = 0; j < datatype; j++)
          row[j] *= sign;
+    }
    }
 }
 
