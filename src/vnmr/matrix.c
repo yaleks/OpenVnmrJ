@@ -17,8 +17,6 @@
 #include <string.h>
 #include "vnmrsys.h"			/* To define UNIX (or VMS)	*/
 
-#pragma GCC optimize ("O3")
-
 #define COMPLETE	0
 #define ERROR		1
 #define REAL		1		/* real word length		*/
@@ -253,7 +251,7 @@ static void itrans(float *matrix, int max2, int max1, int datatype)
 	blocks,
 	length1,
 	length2;
-   void (*invertfunc)();	/* pointer to a function */
+   void (*invertfunc)(float *, int, int, int, int, int);	/* pointer to a function */
 
 
    if (datatype == HYPERCOMPLEX)
