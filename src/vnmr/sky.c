@@ -471,38 +471,40 @@ void scabs(float *frompntr, int fromincr, float mult, short *topntr, int toincr,
 /* 	datatype;	2 = complex    4 = hypercomplex */
 void preproc(float *restrict datapntr, int n, int datatype)
 {
-   int		i,
-			j;
+   int		i, j;
 
    if (datatype == 2)
    {
-      for (i = 0; i < n; i++)
+      float *restrict ptr = datapntr + datatype;
+      for (i = 1; i < n; i += 2)
       {
-         float sign = 1.0f - 2.0f * (float)(i & 1);
-         datapntr[i*2]   *= sign;
-         datapntr[i*2+1] *= sign;
+         ptr[0] *= -1.0f;
+         ptr[1] *= -1.0f;
+         ptr += datatype*2;
       }
    }
    else if (datatype == 4)
    {
-      for (i = 0; i < n; i++)
+      float *restrict ptr = datapntr + datatype;
+      for (i = 1; i < n; i += 2)
       {
-         float sign = 1.0f - 2.0f * (float)(i & 1);
-         datapntr[i*4]   *= sign;
-         datapntr[i*4+1] *= sign;
-         datapntr[i*4+2] *= sign;
-         datapntr[i*4+3] *= sign;
+         ptr[0] *= -1.0f;
+         ptr[1] *= -1.0f;
+         ptr[2] *= -1.0f;
+         ptr[3] *= -1.0f;
+         ptr += datatype*2;
       }
    }
    else
    {
-    for (i = 0; i < n; i++)
-    {
-	  float sign = 1.0f - 2.0f * (float)(i & 1);
-      float *restrict row = datapntr + (long)i * datatype;
-      for (j = 0; j < datatype; j++)
-         row[j] *= sign;
-    }
+      float *restrict ptr = datapntr + datatype;
+      long stride = (long)datatype * 2;
+      for (i = 1; i < n; i += 2)
+      {
+         for (j = 0; j < datatype; j++)
+            ptr[j] *= -1.0f;
+         ptr += stride;
+      }
    }
 }
 
