@@ -17,8 +17,6 @@
 #include <string.h>
 #include <math.h>
 
-#pragma GCC optimize ("O3")
-
 #ifndef M_PI
 #define M_PI    3.14159265358979323846
 #endif 
@@ -64,69 +62,13 @@ extern int debug1;
 #define DPRINT4(str, arg1, arg2, arg3, arg4) 
 #endif 
 
-
-/*-------------------------------
-|				|
-|	     skywt()/0		|
-|				|
-|   Wait for array processor	|
-|   to be done.			|
-|				|
-+------------------------------*/
-void skywt()
-{ 
-}
-
-
-/*-------------------------------
-|				|
-|	   skyinit()/0		|
-|				|
-|  Initialize array processor.	|
-|				|
-+------------------------------*/
-void skyinit()
-{
-}
-
-
-/*-------------------------------
-|				|
-|	    skygo()/0		|
-|				|
-+------------------------------*/
-void skygo()
-{
-}
-
-
-/*-------------------------------
-|				|
-|	   skyinit()/0		|
-|				|
-+------------------------------*/
-void skyend()
-{
-}
-
-
-/*-------------------------------
-|				|
-|	    skyrel()/0		|
-|				|
-+------------------------------*/
-void skyrel()
-{
-}
-
-
 /* vector,vector,vector multiply, real vectors */
 /**********************************/
 void vvvrmult(float *restrict in1, int is1, float *in2, int is2, float *out1, int os1, int n)
 /**********************************/
-{ register int i;
-  register int is1r,is2r,os1r;
-  register float *in1r,*in2r,*out1r;
+{ int i;
+  int is1r,is2r,os1r;
+  float *in1r,*in2r,*out1r;
 
  if (is1 == 1 && is2 == os1)
   {
@@ -164,9 +106,9 @@ void vvvrmult(float *restrict in1, int is1, float *in2, int is2, float *out1, in
 +--------------------------------------*/
 void datafill(float *buffer, int n, float value)
 {
-   register int         i;
-   register float       *buffer0,
-                        d;
+   int         i;
+   float       *buffer0,
+               d;
 
    buffer0 = buffer;
    d = value;
@@ -179,8 +121,8 @@ void datafill(float *buffer, int n, float value)
 /*******************/
 void skymax(float *in1, float *in2, float *out, int n)
 /*******************/
-{ register int i;
-  register float *i1,*i2,*o1;
+{ int i;
+  float *i1,*i2,*o1;
 
   i1 = in1; i2 = in2; o1 = out;
   i = n;
@@ -193,8 +135,8 @@ void skymax(float *in1, float *in2, float *out, int n)
 /*******************/
 void skyadd(float *in1, float *in2, float *out, int n)
 /*******************/
-{ register int i;
-  register float *i1,*i2,*o1;
+{ int i;
+  float *i1,*i2,*o1;
 
   i1 = in1; i2 = in2; o1 = out;
   i = n;
@@ -209,17 +151,19 @@ void skyadd(float *in1, float *in2, float *out, int n)
 /* sum 	 sum of the points */
 /* npnt  number of points */
 /*****************************************/
+#ifndef MACOS
 __attribute__((optimize("associative-math","no-signed-zeros","no-trapping-math")))
+#endif
 void vrsum(float *restrict in1, int is1, float *restrict sum, int npnt)
 /*****************************************/
-{ register float *inptr;
-  register int    inincr;
-  register float  total;
-  register int i;
+{ float *inptr;
+  int    inincr;
+  float  total;
+  int i;
 
   inptr   = in1;
   inincr  = is1;
-  total   = 0.0;
+  total   = 0.0f;
  if (is1 == 1)
   {
     for (i = 0; i < npnt; i++) total += in1[i];
@@ -247,10 +191,10 @@ void vrsum(float *restrict in1, int is1, float *restrict sum, int npnt)
 /************************/
 void vssubr(float *inptr, float val, float *outptr, int n)
 /************************/
-{ register float d;
-  register int i;
-  register float *inp;
-  register float *outp;
+{ float d;
+  int   i;
+  float *inp;
+  float *outp;
 
   inp = inptr;
   outp = outptr;
@@ -269,13 +213,13 @@ void vssubr(float *inptr, float val, float *outptr, int n)
 /*****************************************/
 void vvrramp(float *in1, int is1, float *out1, int os1, float start, float delta, int npnt)
 /*****************************************/
-{ register float *inptr;
-  register int    inincr;
-  register float *outptr;
-  register int    outincr;
-  register float  level;
-  register float  incr;
-  register int    i;
+{ float *inptr;
+  int    inincr;
+  float *outptr;
+  int    outincr;
+  float  level;
+  float  incr;
+  int    i;
 
  if (is1 == 1 && os1 == 1)
   {
@@ -327,11 +271,11 @@ void vvrramp(float *in1, int is1, float *out1, int os1, float start, float delta
 /*         npoints;     number of complex points             */
 void vvvcmult(void *in1, int is1, void *in2, int is2, void *out1, int os1, int npoints)
 {
-   register int         i;
-   register float       tmp;
-   register fcomplex     *input1,
-                        *input2,
-			*output;
+   int         i;
+   float       tmp;
+   fcomplex 	*input1,
+				*input2,
+				*output;
 
    input1 = (fcomplex *)in1;
    input2 = (fcomplex *)in2;
@@ -381,15 +325,15 @@ void vvvcmult(void *in1, int is1, void *in2, int is2, void *out1, int os1, int n
 /*                 npoints;     number of hypercomplex points	*/
 void vvvhcmult(void *in1, int is1, void *in2, int is2, void *out1, int os1, int npoints)
 {
-   register int                 i;
-   register float               rere,
-                                reim,
-                                imre,
-                                imim,
-				tmp;
-   register hypercomplex        *input1,
-                                *input2,
-                                *output;
+   int                 i;
+   float               rere,
+                       reim,
+                       imre,
+                       imim,
+					   tmp;
+   hypercomplex        *input1,
+                       *input2,
+                       *output;
  
    input1 = (hypercomplex *)in1;
    input2 = (hypercomplex *)in2;
@@ -446,9 +390,9 @@ void vvvhcmult(void *in1, int is1, void *in2, int is2, void *out1, int os1, int 
 /* 	mult;		scaling factor				*/
 void scfix1(float *frompntr, int fromincr, float mult, short *topntr, int toincr, int npnts)
 {
-   register short	*destpntr;
-   register int		i;
-   register float	r,
+   short	*destpntr;
+   int		i;
+   float	r,
 			*srcpntr;
 
    srcpntr = frompntr;
@@ -488,9 +432,9 @@ void scfix1(float *frompntr, int fromincr, float mult, short *topntr, int toincr
 /* 	mult;		scaling factor				*/
 void scabs(float *frompntr, int fromincr, float mult, short *topntr, int toincr, int npnts, int sgn)
 {
-   register short	*destpntr;
-   register int		i;
-   register float	a,b,r,
+   short	*destpntr;
+   int		i;
+   float	a,b,r,
 			*srcpntr;
 
    srcpntr = frompntr;
@@ -527,7 +471,7 @@ void scabs(float *frompntr, int fromincr, float mult, short *topntr, int toincr,
 /* 	datatype;	2 = complex    4 = hypercomplex */
 void preproc(float *restrict datapntr, int n, int datatype)
 {
-   register int		i,
+   int		i,
 			j;
 
    if (datatype == 2)
@@ -578,14 +522,14 @@ void preproc(float *restrict datapntr, int n, int datatype)
 /* 	datatype;	2 = complex      4 = hypercomplex */
 void postproc(float *datapntr, int n,  int datatype)
 {
-  int			i,
+  int		i,
 			j,
 			skip;
-  register int		i1,
+  int		i1,
 			i2,
 			i3,
 			i4;
-  float			c1,
+  float		c1,
 			c2,
 			h1r,
 			hli,
@@ -597,15 +541,15 @@ void postproc(float *datapntr, int n,  int datatype)
 			d2,
 			d3,
 			d4;
-  register float	*pi1,
+  float  	*pi1,
 			*pi2,
 			*pi3,
 			*pi4;
-  double		wpr,
+  double	wpr,
 			wpi,
 			wtemp,
 			theta;
-  register double	wr,
+  double	wr,
 			wi;
 
 
@@ -725,8 +669,8 @@ void postproc(float *datapntr, int n,  int datatype)
 void combine(float *combinebuf, float *outp, int npoints, int datatype,
              float r1, float r2, float r3, float r4)
 {
-   register int		i;
-   register float	*combuffer,
+   int		i;
+   float	*combuffer,
 			*output;
 
    combuffer = combinebuf;
@@ -759,42 +703,25 @@ void combine(float *combinebuf, float *outp, int npoints, int datatype,
 /* Both shiftpts and npoints are numbers of complex pairs */
 void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
 {
-   register int		i;
-   register float	*endptr,
-			*sptr;
-	
    if (shiftpts == 0)
       return;
    if (shiftpts > 0) /* right shift */
    {
 	if (npoints > len - shiftpts)
          npoints = len - shiftpts;
-	if (npoints < 16)
-	{
-	  sptr = ptr+(npoints)*2 -1;
-      endptr = ptr+(npoints+shiftpts)*2 - 1;
 
-      for (i = 0; i < npoints; i++)
-      { 
-         *endptr-- = *sptr--; 
-         *endptr-- = *sptr--; 
-      }
-      for (i = 0; i < shiftpts; i++)
-      { 
-         *endptr-- = 0.0;
-         *endptr-- = 0.0;
-      }
-	}
-	 else
-	{
-	   memmove(ptr + (long)shiftpts * 2, ptr, (size_t)npoints * 2 * sizeof(float));
-       memset(ptr, 0, (size_t)shiftpts * 2 * sizeof(float));
-	}
+	memmove(ptr + (long)shiftpts * 2, ptr, (size_t)npoints * 2 * sizeof(float));
+    memset(ptr, 0, (size_t)shiftpts * 2 * sizeof(float));
    }
    else if (shiftpts < 0) /* left shift */
    {
-	if (npoints + shiftpts < 16)
+	// For this case, memmove is very slow
+	if (shiftpts > -16)
 	{
+	  int	i;
+      float	*endptr,
+			*sptr;
+
       shiftpts *= -1;
       sptr = ptr+(shiftpts)*2;
       endptr = ptr;
@@ -806,8 +733,8 @@ void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
       }
       for (i = 0; i < shiftpts; i++)
       { 
-         *endptr++ = 0.0;
-         *endptr++ = 0.0;
+         *endptr++ = 0.0f;
+         *endptr++ = 0.0f;
       }
 	}
 	else
@@ -834,8 +761,8 @@ void shiftComplexData(float *ptr, int shiftpts, int npoints, int len)
 /* float *data;		pointer to complex/hypercomplex data		*/
 void negateimaginary(float *data, int npoints, int datatype)
 {
-   register int		i;
-   register float	*tmp;
+   int		i;
+   float	*tmp;
 
    tmp = data + (datatype/2);
    if (datatype == HYPERCOMPLEX)
@@ -874,7 +801,7 @@ void negateimaginary(float *data, int npoints, int datatype)
 /* outp;	pointer to 32-bit, floating point FID data	*/
 void cnvrts32(float scalefactor, int *restrict inp, float *restrict outp, int npx, int lsfidx)
 {
-   register int	  i;
+   int	  i;
 
    if (lsfidx == 0)
    {
@@ -915,7 +842,7 @@ void cnvrts32(float scalefactor, int *restrict inp, float *restrict outp, int np
 /* 	*outp;		pointer to 32-bit, floating point FID data	*/
 void cnvrts16(float scalefactor, short *restrict inp, float *restrict outp, int npx, int lsfidx)
 {
-   register int		i;
+   int		i;
 
    if (lsfidx == 0)
    {
@@ -937,24 +864,4 @@ void cnvrts16(float scalefactor, short *restrict inp, float *restrict outp, int 
 	  for (i = 0; i < lsfidx; i++)
          outp[i+npx-lsfidx] = 0.0f;
    }
-}
-
-
-/*-----------------------------------------------
-|						|
-|		AP_bootup_msg()			|
-|						|
-|   This is merely a message line to be gen-	|
-|   erated (conditionally) in bootup.c.  By	|
-|   putting the message here (sky.c), sky.c is	|
-|   now the only source code file which uses	|
-|   the "AP" conditional compile flag, thus	|
-|   simplifying maintenance.			|
-|						|
-+----------------------------------------------*/
-void AP_bootup_msg()
-{
-#ifdef AP
-   Wscrprintf( "              Version for Sky Array Processor\n");
-#endif 
 }
