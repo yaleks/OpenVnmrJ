@@ -151,9 +151,6 @@ void skyadd(float *in1, float *in2, float *out, int n)
 /* sum 	 sum of the points */
 /* npnt  number of points */
 /*****************************************/
-#ifndef MACOS
-__attribute__((optimize("associative-math","no-signed-zeros","no-trapping-math")))
-#endif
 void vrsum(float *restrict in1, int is1, float *restrict sum, int npnt)
 /*****************************************/
 { float *inptr;
@@ -166,11 +163,25 @@ void vrsum(float *restrict in1, int is1, float *restrict sum, int npnt)
   total   = 0.0f;
  if (is1 == 1)
   {
-    for (i = 0; i < npnt; i++) total += in1[i];
+      float acc0=0,acc1=0,acc2=0,acc3=0,acc4=0,acc5=0,acc6=0,acc7=0;
+      for (i = 0; i + 8 <= npnt; i += 8)
+      {
+         acc0 += in1[i+0]; acc1 += in1[i+1]; acc2 += in1[i+2]; acc3 += in1[i+3];
+         acc4 += in1[i+4]; acc5 += in1[i+5]; acc6 += in1[i+6]; acc7 += in1[i+7];
+      }
+      total = ((acc0+acc1)+(acc2+acc3)) + ((acc4+acc5)+(acc6+acc7));
+      for (; i < npnt; i++) total += in1[i];
   }
   else if (is1 == 2)
   {
-    for (i = 0; i < npnt; i++) total += in1[i * 2];
+      float acc0=0,acc1=0,acc2=0,acc3=0,acc4=0,acc5=0,acc6=0,acc7=0;
+      for (i = 0; i + 8 <= npnt; i += 8)
+      {
+         acc0 += in1[(i+0)*2]; acc1 += in1[(i+1)*2]; acc2 += in1[(i+2)*2]; acc3 += in1[(i+3)*2];
+         acc4 += in1[(i+4)*2]; acc5 += in1[(i+5)*2]; acc6 += in1[(i+6)*2]; acc7 += in1[(i+7)*2];
+      }
+      total = ((acc0+acc1)+(acc2+acc3)) + ((acc4+acc5)+(acc6+acc7));
+      for (; i < npnt; i++) total += in1[i*2];
   }
   else
  {
