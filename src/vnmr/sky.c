@@ -823,7 +823,7 @@ void cnvrts32(float scalefactor, int *restrict inp, float *restrict outp, int np
    }
    else if (lsfidx < 0)
    {
-      for (i = 0; i < npx+lsfidx; i++)
+      for (i = 0; i < npx; i++)
          outp[i - lsfidx] = scalefactor * (float)inp[i];
 
       for (i = 0; i < (-1)*lsfidx; i++)
@@ -864,7 +864,7 @@ void cnvrts16(float scalefactor, short *restrict inp, float *restrict outp, int 
    }
    else if (lsfidx < 0)
    {
-      for (i = 0; i < npx+lsfidx; i++)
+      for (i = 0; i < npx; i++)
          outp[i - lsfidx] = scalefactor * (float)inp[i];
     
       for (i = 0; i < (-1)*lsfidx; i++)
