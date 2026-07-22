@@ -989,7 +989,7 @@ static void blockedByGet(char *dir, char *name)
    int  blk = 0;
 #endif
 
-   sprintf(blockpath,"%s/%s",dir,name);
+   snprintf(blockpath,sizeof(blockpath),"%s/%s",dir,name);
    /* The get operation should be fast, but avoid endless loop with cnt */
    while ( ! access(blockpath, F_OK) && (cnt < 20) )
    {
