@@ -356,7 +356,7 @@ void ReviewQueue::notifyVJ(const char *action) {
     int vp = (int)getReal("jviewport", 1);
 
     char str[MAXSTR];
-    sprintf(str, "RQ notify %d %s %s", vp, xmlpath, action);
+    snprintf(str, sizeof(str), "RQ notify %d %s %s", vp, xmlpath, action);
     writelineToVnmrJ("vnmrjcmd", str);
 
     // now write the same xml file in persistence
@@ -1044,9 +1044,6 @@ void ReviewQueue::copyNode(RQimage *image, string nid) {
 }
 
 void ReviewQueue::insertNode(RQstudy& study, RQnode *node) {
-    if (&study == (RQstudy *)NULL)
-        return;
-
     if (node == (RQnode *)NULL) {
         appendNodes(study);
         return;
@@ -1068,8 +1065,6 @@ void ReviewQueue::insertNode(RQstudy& study, RQnode *node) {
 }
 
 void ReviewQueue::insertNode(RQgroup& group, RQnode *node) {
-    if (&group == (RQgroup *)NULL)
-        return;
     if (node == (RQnode *)NULL) {
         appendNodes(group);
         return;
@@ -1115,8 +1110,6 @@ void ReviewQueue::insertNode(RQgroup& group, RQnode *node) {
 }
 
 void ReviewQueue::insertNode(RQimage& image, RQnode *node) {
-    if (&image == (RQimage *)NULL)
-        return;
     if (node == (RQnode *)NULL) {
         RQgroup newGroup = RQgroup(image.getGroupPath());
         newGroup.addChild(image);
@@ -1297,10 +1290,13 @@ void ReviewQueue::makeGroups(const char *path, std::list<RQgroup>& groups,
           while (fgets(buf,sizeof(buf),fp)) {
             if(strlen(buf) > 1 && buf[0] != '#') {
               if(buf[0] != '/') {
-                sprintf(str, "%s/",path);
-                strncat(str,buf,strlen(buf)-1);
+                snprintf(str, sizeof(str), "%s/",path);
+                strncat(str,buf,sizeof(str) - strlen(str) - 1);
               } else {
-                strncpy(str,buf,strlen(buf)-1);
+                size_t take = strlen(buf);
+                if (take > 0) take--;
+                if (take >= sizeof(str)) take = sizeof(str) - 1;
+                snprintf(str, sizeof(str), "%.*s", (int)take, buf);
               }
               if(stat(str, &fstat) == 0) { // aipList exists
                   makeGroups(str, groups, firstFrame+groups.size(), show);
@@ -1312,7 +1308,7 @@ void ReviewQueue::makeGroups(const char *path, std::list<RQgroup>& groups,
     } 
 
     if (stat(path, &fstat) != 0) {
-        sprintf(str, "%s: \"%.1024s\"", strerror(errno), path);
+        snprintf(str, sizeof(str), "%s: \"%.1024s\"", strerror(errno), path);
         ib_errmsg(str);
         return;
     }
@@ -1320,7 +1316,7 @@ void ReviewQueue::makeGroups(const char *path, std::list<RQgroup>& groups,
     if (S_ISDIR(fstat.st_mode)) {
         n = scandir(path, &namelist, 0, alphasort);
         if (n < 0) {
-            sprintf(str, "%s: \"%.1024s\"", strerror(errno), path);
+            snprintf(str, sizeof(str), "%s: \"%.1024s\"", strerror(errno), path);
             ib_errmsg(str);
             return;
         }
@@ -2097,8 +2093,8 @@ void ReviewQueue::makeImageList_RQ(int globalSort) {
             return;
 
         for (int i=0; i<msize; i++) {
-            for (int j=0; j<images2D.size(); j++) {
-                if (i < images2D[j].size())
+            for (int j=0; j<(int)images2D.size(); j++) {
+                if (i < (int)images2D[j].size())
                     m_selectedImages.push_back(images2D[j][i]);
             }
         }
@@ -2188,7 +2184,7 @@ void ReviewQueue::makeSelections(int globalSort, int layoutMode,
     list<string>::iterator itr;
     for (itr = sl.begin(); itr != sl.end(); ++itr) {
         int p1;
-        if ((p1 = itr->find_first_of(" ")) != string::npos)
+        if ((p1 = itr->find_first_of(" ")) != (int)string::npos)
             gstr = itr->substr(0, p1);
 
         p1 = p1 + 1;
@@ -2302,7 +2298,7 @@ void ReviewQueue::setSelection(string str) {
         cout << str << endl;
 
         int p1;
-        if ((p1 = str.find_first_of(" ")) != string::npos)
+        if ((p1 = str.find_first_of(" ")) != (int)string::npos)
             gstr = str.substr(0, p1);
 
         list<int> sel = ps->parseGroups(gstr, getNumGroups());
@@ -2517,7 +2513,7 @@ string ReviewQueue::getNodeAttribute(string str, string name) {
     } else if (value == ""&& node->getAttribute("type") == "img") {
         string v = DataManager::get()->getHeaderParam(node->getKey(), name);
         int p = v.find(" ", 0);
-        if (p != string::npos) {
+        if (p != (int)string::npos) {
             value = v.substr(p+1, v.length()-1);
             return value;
         }
@@ -2533,7 +2529,7 @@ string ReviewQueue::getRQvalue(string name) {
     else if (strcasecmp(name.c_str(), "numofgroups") == 0)
         sprintf(str, "%d", getNumGroups());
     else if (strcasecmp(name.c_str(), "numofstudies") == 0)
-        sprintf(str, "%d", studies->size());
+        sprintf(str, "%d", (int)studies->size());
     else if (strcasecmp(name.c_str(), "batches") == 0)
         sprintf(str, "%d", m_batches);
     else if (strcasecmp(name.c_str(), "batch") == 0)
@@ -2654,7 +2650,7 @@ void ReviewQueue::makeGlobalSelection(int globalSort, string str) {
                     b=true;
                     group->setAttribute("display", "yes");
                 }
-            } else if ((pos = str.find("coil", 0)) != string::npos) {
+            } else if ((pos = str.find("coil", 0)) != (int)string::npos) {
                 id = atoi(str.substr(pos+4).c_str());
                 group->selectByPar("coil", id);
                 if (group->getSelSize() == 0)
@@ -2707,8 +2703,8 @@ void ReviewQueue::makeGlobalSelection(int globalSort, string str) {
             for (iitr2=l->begin(); iitr2 != l->end(); ++iitr2) {
                 images1D.push_back(*iitr2);
             }
-            if (images1D.size() > msize)
-                msize = images1D.size();
+            if ((int)images1D.size() > msize)
+                msize = (int)images1D.size();
             images2D.push_back(images1D);
         }
         if (images2D.size() <= 0)
@@ -2716,8 +2712,8 @@ void ReviewQueue::makeGlobalSelection(int globalSort, string str) {
 
         int n = 0;
         for (int i=0; i<msize; i++) {
-            for (int j=0; j<images2D.size(); j++) {
-                if (i < images2D[j].size()) {
+            for (int j=0; j<(int)images2D.size(); j++) {
+                if (i < (int)images2D[j].size()) {
                     n++;
                     imap.insert(map<int, RQnode *>::value_type(n,
                             images2D[j][i]));
@@ -2968,7 +2964,7 @@ void ReviewQueue::reloadData(int mode, string selection) {
         }
     } else if (mode == DATA_GROUP) {
       RQnode *node = getNode(getActiveKey());
-      if (node == (RQnode *)NULL) {
+      if (node != (RQnode *)NULL) {
 	deleteData(node->getKey());
         ((RQgroup *)node)->resetChildren();
       }
@@ -3047,13 +3043,13 @@ void ReviewQueue::disImagePlane(spDataInfo_t dataInfo, string key, int n,
    GframeManager *gfm = GframeManager::get();
    int pos;
    int ind=0;
-   if((pos = key.find("xy")) != string::npos) {
+   if((pos = key.find("xy")) != (int)string::npos) {
       gfm->setFrameToLoad(0);
       ind=1;
-   } else if((pos = key.find("yz")) != string::npos) {
+   } else if((pos = key.find("yz")) != (int)string::npos) {
       gfm->setFrameToLoad(1);
       ind=2;
-   } else if((pos = key.find("xz")) != string::npos) {
+   } else if((pos = key.find("xz")) != (int)string::npos) {
       gfm->setFrameToLoad(2);
       ind=3;
    } else return;
@@ -3216,7 +3212,7 @@ int ReviewQueue::getPlaneOrient(string key) {
     // -1 if not a 3D plane
 
     int p = key.find_first_of(" ", 0);
-    if (p != string::npos)
+    if (p != (int)string::npos)
         key = key.substr(p+1);
     if (key.find("_xy") != string::npos) {
         return 2;
