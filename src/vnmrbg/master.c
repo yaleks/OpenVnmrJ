@@ -998,7 +998,7 @@ int             fd;
 	    DPRINT0("M: ...don't suspend anymore (kill timer)\n");
 	 }
 	 else
-	    DPRINT0("M: ...read all of them\n");
+	 	{ DPRINT0("M: ...read all of them\n"); }
 	 read(fd, IObuffer, len);
 	 n -= len;
 	 chewEachChar(IObuffer, len);
