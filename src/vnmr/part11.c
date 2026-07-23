@@ -195,8 +195,10 @@ int fidCheckedOk()
 
 	ptr=curfid_linkpath;
         if(linked && strstr(ptr+strlen(curfid_linkpath)-3,"fid") != NULL) {
-            snprintf(str, sizeof(str), "%s", "");
-            strncat(str, curfid_linkpath, strlen(curfid_linkpath)-3);
+            size_t take = strlen(curfid_linkpath);
+            if (take >= 3) take -= 3; else take = 0;
+            if (take >= sizeof(str)) take = sizeof(str) - 1;
+            snprintf(str, sizeof(str), "%.*s", (int)take, curfid_linkpath);
 
             if(debug)fprintf(stderr,"fidCheckOk linkpath %s\n", str);
 
@@ -975,8 +977,10 @@ void make_checksum(char *key, char *dest)
         if((ptr = strstr(buf,filekey)) == buf) {
             ptr += k1;
             if(strstr(ptr,":yes\n") != NULL) {
-                snprintf(str, sizeof(str), "%s", "");
-                strncat(str, ptr, strlen(ptr)-5);
+                size_t take = strlen(ptr);
+                if (take >= 5) take -= 5; else take = 0;
+                if (take >= sizeof(str)) take = sizeof(str) - 1;
+                snprintf(str, sizeof(str), "%.*s", (int)take, ptr);
 		snprintf(file, sizeof(file), "%s/%s", dest, str);
 		if((rfp = fopen(file, "r"))) {
                     snprintf(files[n], sizeof(files[n]), "%s", str);
@@ -990,8 +994,10 @@ void make_checksum(char *key, char *dest)
             ptr += k2;
             nf = 0;
             if(strstr(ptr,":yes\n") != NULL) {
-                snprintf(str, sizeof(str), "%s", "");
-                strncat(str, ptr, strlen(ptr)-5);
+                size_t take = strlen(ptr);
+                if (take >= 5) take -= 5; else take = 0;
+                if (take >= sizeof(str)) take = sizeof(str) - 1;
+                snprintf(str, sizeof(str), "%.*s", (int)take, ptr);
                 snprintf(path, sizeof(path), "%s/%s", dest, str);
 		if(!isAdirectory(path)) {
                     if((rfp = fopen(path, "r"))) {
@@ -1001,7 +1007,7 @@ void make_checksum(char *key, char *dest)
                     if(rfp)
                         fclose(rfp);
 		} else {
-                    getFilenames(path, "", fs, &nf, MAXFILES);
+                    getFilenames(path, (string){0}, fs, &nf, MAXFILES);
                     for(i=0; i<nf; i++) {
                         snprintf(file, sizeof(file), "%s/%s", path, fs[i]);
                         if((rfp = fopen(file, "r"))) {
@@ -1880,8 +1886,10 @@ void writeLineForLoc(string path, char* type)
     string currentPart11Path;
 
     if(path[strlen(path)-1] == '/') { 
-	snprintf(currentPart11Path, sizeof(currentPart11Path), "%s", "");
-	strncat(currentPart11Path, path, strlen(path)-1);
+	size_t take = strlen(path);
+	if (take > 0) take--;
+	if (take >= sizeof(currentPart11Path)) take = sizeof(currentPart11Path) - 1;
+	snprintf(currentPart11Path, sizeof(currentPart11Path), "%.*s", (int)take, path);
     } else {
 	snprintf(currentPart11Path, sizeof(currentPart11Path), "%s", path);
     }
@@ -2006,8 +2014,12 @@ static int save_acqfil(char* orig, char* dest)
         if(fileExist(origpath)) {
 	  string tmp;
 	  safecp_file(safecpPath, origpath, destpath);
-	  snprintf(tmp, sizeof(tmp), "%s", "");
-	  strncat(tmp,dest,strlen(dest)-7); 
+	  {
+	    size_t take = strlen(dest);
+	    if (take >= 7) take -= 7; else take = 0;
+	    if (take >= sizeof(tmp)) take = sizeof(tmp) - 1;
+	    snprintf(tmp, sizeof(tmp), "%.*s", (int)take, dest);
+	  }
           snprintf(destpath, sizeof(destpath), "%s%s", tmp, "procpar");
 	  // save redundant procpar in .REC
 	  safecp_file(safecpPath, origpath, destpath);
@@ -2052,7 +2064,7 @@ static int save_acqfil(char* orig, char* dest)
 	
         nfiles = 0;
         snprintf(file, sizeof(file), "%s/%s", infile, "maclib");
-        getFilenames(file, "", files, &nfiles, MAXSTR);
+        getFilenames(file, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(origpath, sizeof(origpath), "%s/%s", file, files[i]);
             snprintf(destpath, sizeof(destpath), "%s%s/%s", dest, "maclib", files[i]);
@@ -2063,7 +2075,7 @@ static int save_acqfil(char* orig, char* dest)
     if(part11_std_files->shims) {
         nfiles = 0;
         snprintf(file, sizeof(file), "%s/%s", infile, "shims");
-        getFilenames(file, "", files, &nfiles, MAXSTR);
+        getFilenames(file, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(origpath, sizeof(origpath), "%s/%s", file, files[i]);
             snprintf(destpath, sizeof(destpath), "%s%s/%s", dest, "shims", files[i]);
@@ -2074,7 +2086,7 @@ static int save_acqfil(char* orig, char* dest)
     if(part11_std_files->waveforms) {
         nfiles = 0;
         snprintf(file, sizeof(file), "%s/%s", infile, "shapelib");
-        getFilenames(file, "", files, &nfiles, MAXSTR);
+        getFilenames(file, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(origpath, sizeof(origpath), "%s/%s", file, files[i]);
             snprintf(destpath, sizeof(destpath), "%s%s/%s", dest, "shapelib", files[i]);
@@ -2085,7 +2097,7 @@ static int save_acqfil(char* orig, char* dest)
     if(part11_std_files->pulseSequence) {
         nfiles = 0;
         snprintf(file, sizeof(file), "%s/%s", infile, "psglib");
-        getFilenames(file, "", files, &nfiles, MAXSTR);
+        getFilenames(file, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(origpath, sizeof(origpath), "%s/%s", file, files[i]);
             snprintf(destpath, sizeof(destpath), "%s%s/%s", dest, "psglib", files[i]);
@@ -2101,7 +2113,7 @@ static int save_acqfil(char* orig, char* dest)
 
     if(incInc) {
         nfiles = 0;
-        getFilenames(incPath, "", files, &nfiles, MAXSTR);
+        getFilenames(incPath, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(origpath, sizeof(origpath), "%s%s", incPath, files[i]);
             snprintf(destpath, sizeof(destpath), "%s%s/%s", dest, "incFiles", files[i]);
@@ -2267,7 +2279,7 @@ static void save_datdir(char* orig, char* dest)
         nfiles = 0;
         snprintf(file, sizeof(file), "%s/%s", curexpdir, "recon");
         if(fileExist(file)) {
-            getFilenames(file, "", files, &nfiles, MAXSTR);
+            getFilenames(file, (string){0}, files, &nfiles, MAXSTR);
             for(i=0; i<nfiles; i++) {
                 snprintf(path1, sizeof(path1), "%s/%s", file, files[i]);
                 snprintf(path2, sizeof(path2), "%s%s/%s", dest, "recon", files[i]);
@@ -2313,7 +2325,7 @@ static void save_datdir(char* orig, char* dest)
     if(part11_std_files->usermaclib) {
         nfiles = 0;
         snprintf(file, sizeof(file), "%s/%s", curexpdir, "maclib");
-        getFilenames(file, "", files, &nfiles, MAXSTR);
+        getFilenames(file, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(path1, sizeof(path1), "%s/%s", file, files[i]);
             snprintf(path2, sizeof(path2), "%s%s/%s", dest, "maclib", files[i]);
@@ -2323,7 +2335,7 @@ static void save_datdir(char* orig, char* dest)
 
     if(incInc) {
         nfiles = 0;
-        getFilenames(incPath, "", files, &nfiles, MAXSTR);
+        getFilenames(incPath, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) {
             snprintf(path1, sizeof(path1), "%s%s", incPath, files[i]);
             snprintf(path2, sizeof(path2), "%s%s/%s", dest, "incFiles", files[i]);
@@ -2333,7 +2345,7 @@ static void save_datdir(char* orig, char* dest)
 
     if(part11_std_files->snapshot && mode_of_vnmr == AUTOMATION) {
         nfiles = 0;
-        getFilenames(orig, "", files, &nfiles, MAXSTR);
+        getFilenames(orig, (string){0}, files, &nfiles, MAXSTR);
         for(i=0; i<nfiles; i++) if(strncmp(files[i], "spec.", 5) == 0) {
             snprintf(path1, sizeof(path1), "%s%s", orig, files[i]);
             snprintf(path2, sizeof(path2), "%s%s", dest, files[i]);
@@ -2454,7 +2466,7 @@ static int getLastVersion(char* path, char* name)
     string file, files[MAXSTR];
     int nfiles = 0;
 
-    getFilenames_1level(path, "", files, &nfiles, MAXSTR);
+    getFilenames_1level(path, (string){0}, files, &nfiles, MAXSTR);
 
     n = -1;
     for(i=0; i<nfiles; i++) {
@@ -3093,7 +3105,7 @@ int makeChecksums(char *rootpath, char *checksumFile)
     char files[MAXFILES][MAXSTR];
     int nfiles = 0;
 
-     getFilenames(rootpath, "", files, &nfiles, MAXFILES);
+     getFilenames(rootpath, (string){0}, files, &nfiles, MAXFILES);
     return makeChksums(rootpath, checksumFile, files, nfiles);
 }
 
@@ -3224,8 +3236,10 @@ int chchsums(int argc, char *argv[], int retc, char *retv[])
             bad = checkPart11Checksums0(path, stdout);
 	} else if(strEndsWith(path,"/checksum") || 
                   strEndsWith(path,"/checksum/")) {
-	    snprintf(tmpfile, sizeof(tmpfile), "%s", "");
-            strncat(tmpfile,path,strlen(path)-9);
+	    size_t take = strlen(path);
+	    if (take >= 9) take -= 9; else take = 0;
+	    if (take >= sizeof(tmpfile)) take = sizeof(tmpfile) - 1;
+	    snprintf(tmpfile, sizeof(tmpfile), "%.*s", (int)take, path);
 	    bad = checkPart11Checksums0(tmpfile, stdout);
 	} else if(!isAdirectory(path)) { // file contains checksum(s)
 	    bad = checkChecksums("", path, stdout, "");
@@ -4071,8 +4085,10 @@ void p11_saveDisCmd()
     if(strStartsWith(currentCmd,"ds") || strStartsWith(currentCmd,"dcon") ||
        strStartsWith(currentCmd,"aipDisplay"))  
 	if(currentCmd[strlen(currentCmd)-1] == '\n') {
-	    snprintf(cmd, sizeof(cmd), "%s", "");
-	    strncat(cmd, currentCmd, strlen(currentCmd)-1);
+	    size_t take = strlen(currentCmd);
+	    if (take > 0) take--;
+	    if (take >= sizeof(cmd)) take = sizeof(cmd) - 1;
+	    snprintf(cmd, sizeof(cmd), "%.*s", (int)take, currentCmd);
 	} else snprintf(cmd, sizeof(cmd), "%s", currentCmd);
     else if(getProcdim() == 2) snprintf(cmd, sizeof(cmd), "%s", "dconi");
     else if(getProcdim() == 1) snprintf(cmd, sizeof(cmd), "%s", "ds");
@@ -4180,8 +4196,12 @@ int svr_FDA(int argc, char *argv[], int retc, char *retv[])
     if(fid_linked && strlen(curfid_linkpath) > 10 &&
        (strEndsWith(curfid_linkpath, ".REC/acqfil/fid") ||
 	strEndsWith(curfid_linkpath, ".rec/acqfil/fid"))) {
-        snprintf(linkpath, sizeof(linkpath), "%s", "");
-        strncat(linkpath, curfid_linkpath, strlen(curfid_linkpath)-10);
+        {
+            size_t take = strlen(curfid_linkpath);
+            if (take >= 10) take -= 10; else take = 0;
+            if (take >= sizeof(linkpath)) take = sizeof(linkpath) - 1;
+            snprintf(linkpath, sizeof(linkpath), "%.*s", (int)take, curfid_linkpath);
+        }
     } else {
 	char str[MAXSTR];
         fid_linked = 0;
@@ -4265,12 +4285,20 @@ int svr_FDA(int argc, char *argv[], int retc, char *retv[])
         } else snprintf(path, sizeof(path), "%s", filepath);
 
         if(strEndsWith(path,".REC") || strEndsWith(path,".rec")) {
-            snprintf(filepath, sizeof(filepath), "%s", "");
-            strncat(filepath, path, strlen(path)-4);
+            {
+                size_t take = strlen(path);
+                if (take >= 4) take -= 4; else take = 0;
+                if (take >= sizeof(filepath)) take = sizeof(filepath) - 1;
+                snprintf(filepath, sizeof(filepath), "%.*s", (int)take, path);
+            }
             strncat(filepath, recsuffix, sizeof(filepath) - strlen(filepath) - 1);
         } else if(strEndsWith(path,".REC/") || strEndsWith(path,".rec/")) {
-            snprintf(filepath, sizeof(filepath), "%s", "");
-            strncat(filepath, path, strlen(path)-5);
+            {
+                size_t take = strlen(path);
+                if (take >= 5) take -= 5; else take = 0;
+                if (take >= sizeof(filepath)) take = sizeof(filepath) - 1;
+                snprintf(filepath, sizeof(filepath), "%.*s", (int)take, path);
+            }
             strncat(filepath, recsuffix, sizeof(filepath) - strlen(filepath) - 1);
         } else {
 	    snprintf(filepath, sizeof(filepath), "%s", path);
@@ -4757,8 +4785,12 @@ int rt_FDA(int argc, char *argv[], int retc, char *retv[],
     /* if everything ok, copy parameters to PROCESSED */
 
     brkPath(filepath, path,datname);
-    snprintf(filepath0, sizeof(filepath0), "%s", "");
-    strncat(filepath0,path,strlen(path)-1);
+    {
+        size_t take = strlen(path);
+        if (take > 0) take--;
+        if (take >= sizeof(filepath0)) take = sizeof(filepath0) - 1;
+        snprintf(filepath0, sizeof(filepath0), "%.*s", (int)take, path);
+    }
     P_setstring(CURRENT,"file",filepath0,0);
     P_treereset(PROCESSED);       /* clear the tree first */
     P_copy(CURRENT,PROCESSED);
@@ -5004,12 +5036,16 @@ int getFidName(int argc, char *argv[], int retc, char *retv[])
 
     if(fid_linked && (strstr(curfid_linkpath, ".REC") != NULL ||
                       strstr(curfid_linkpath, ".rec") != NULL)) {
-        snprintf(str, sizeof(str), "%s", ""); 
-        strncat(str, curfid_linkpath, strlen(curfid_linkpath)-11);
+        size_t take = strlen(curfid_linkpath);
+        if (take >= 11) take -= 11; else take = 0;
+        if (take >= sizeof(str)) take = sizeof(str) - 1;
+        snprintf(str, sizeof(str), "%.*s", (int)take, curfid_linkpath);
         brkPath(str, root, name);
     } else if(fid_linked) {
-        snprintf(str, sizeof(str), "%s", ""); 
-        strncat(str, curfid_linkpath, strlen(curfid_linkpath)-4);
+        size_t take = strlen(curfid_linkpath);
+        if (take >= 4) take -= 4; else take = 0;
+        if (take >= sizeof(str)) take = sizeof(str) - 1;
+        snprintf(str, sizeof(str), "%.*s", (int)take, curfid_linkpath);
         brkPath(str, root, name); 
     } else snprintf(name, sizeof(name), "%s", "");
 
@@ -5283,11 +5319,15 @@ int getDataStat(int argc, char *argv[], int retc, char *retv[])
                     else if(strstr(curfid_linkpath, ".par") != NULL) i = 1;
 
                     if(i == 1 || i == 2) {
-                        snprintf(path, sizeof(path), "%s", ""); 
-                        strncat(path, curfid_linkpath, strlen(curfid_linkpath)-11);
+                        size_t take = strlen(curfid_linkpath);
+                        if (take >= 11) take -= 11; else take = 0;
+                        if (take >= sizeof(path)) take = sizeof(path) - 1;
+                        snprintf(path, sizeof(path), "%.*s", (int)take, curfid_linkpath);
                     } else {
-                        snprintf(path, sizeof(path), "%s", ""); 
-                        strncat(path, curfid_linkpath, strlen(curfid_linkpath)-4);
+                        size_t take = strlen(curfid_linkpath);
+                        if (take >= 4) take -= 4; else take = 0;
+                        if (take >= sizeof(path)) take = sizeof(path) - 1;
+                        snprintf(path, sizeof(path), "%.*s", (int)take, curfid_linkpath);
                     }
                 }
             }
@@ -5391,64 +5431,96 @@ int deleteREC(int argc, char *argv[], int retc, char *retv[])
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	        fprintf(fp, "acq operator | %s\n", str); 
 	      } else if(strstr(buf,"fidid") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "fidid | %s\n", str); 
 	      } else if(strstr(buf,"fidid") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "dataid | %s\n", str); 
 	      } else if(strstr(buf,"console") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "console | %s\n", str); 
 	      } else if(strstr(buf,"seqfil") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "seqfil | %s\n", str); 
 	      } else if(strstr(buf,"samplename") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "samplename | %s\n", str); 
 	      } else if(strstr(buf,"time_run") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "time_run | %s\n", str); 
 	      } else if(strstr(buf,"time_saved") == buf && fgets(buf,sizeof(buf),fpp)) {
 	      	getStrValues(buf, words, &nwords, " ");
                 if(nwords > 1) {
 		  ptmp = words[1]; ptmp++;	
-                  snprintf(str, sizeof(str), "%s", "");
-		  strncat(str,ptmp,strlen(words[1])-2);
+                  {
+                    size_t take = strlen(words[1]);
+                    if (take >= 2) take -= 2; else take = 0;
+                    if (take >= sizeof(str)) take = sizeof(str) - 1;
+                    snprintf(str, sizeof(str), "%.*s", (int)take, ptmp);
+                  }
 		} else snprintf(str, sizeof(str), "%s", "?");
 	     	fprintf(fp, "time_saved | %s\n", str); 
 	      } 
@@ -5514,7 +5586,7 @@ static void copyFiles(char *safecpPath, char *orig, char *dest)
        if(fileExist(dest)) unlink(dest);
        safecp_file(safecpPath, orig, dest); 
     } else {
-      getFilenames(orig, "", files, &nfiles, MAXFILES);
+      getFilenames(orig, (string){0}, files, &nfiles, MAXFILES);
       for(i=0; i<nfiles; i++) {
         snprintf(path1, sizeof(path1), "%s/%s", orig, files[i]);
         snprintf(path2, sizeof(path2), "%s/%s", dest, files[i]);
