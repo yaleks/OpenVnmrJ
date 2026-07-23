@@ -81,7 +81,7 @@ void *allocateWithId(size_t n, const char *id)
 	 first = p;
       p->prev = last;
       last    = p;
-      return(&(p->data));
+      return(p->data);
    }
    else
       return(nil);
@@ -223,7 +223,7 @@ void releaseAllWithId(const char *id)
    while (p)
       if (id == nil || strcmp(p->id,id) == 0)
       {  q = p->next;
-	 release(&(p->data));
+	 release(p->data);
 	 p = q;
       }
       else
@@ -272,7 +272,7 @@ void *scanFor(const char *id, char **p, int *n, const char **i)
    while (q)
       if ( (id==nil) || (strcmp(q->id,id)==0) )
       {  *n = q->size;
-	 *p = &(q->data);
+	 *p = q->data;
 	 if (id == nil)
          {
 	    if (q->id)
@@ -280,7 +280,7 @@ void *scanFor(const char *id, char **p, int *n, const char **i)
 	    else
 	       *i = "<no id>";
          }
-	 return(&(q->data));
+	 return(q->data);
       }
       else
 	 q = q->next;
@@ -329,9 +329,9 @@ void *skyallocateWithId(size_t n, const char *id)
       last    = p;
 #ifdef DEBUG
       if (Eflag)
-        fprintf(stderr,"(block 0x%08x) gives 0x%08x\n",p,&(p->data));
+        fprintf(stderr,"(block 0x%08x) gives 0x%08x\n",p,p->data);
 #endif
-      return(&(p->data));
+      return(p->data);
    }
    else
    {  if (Eflag)
@@ -408,7 +408,7 @@ void skyreleaseAllWithId(const char *id)
    while (p)
       if (id == nil || strcmp(p->id,id) == 0)
       {  q = p->next;
-	 skyrelease(&(p->data));
+	 skyrelease(p->data);
 	 p = q;
       }
       else
