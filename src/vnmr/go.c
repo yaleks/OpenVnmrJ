@@ -2640,7 +2640,7 @@ static int test4ACQ(char *dirname, char *dirpath, int acqiflag)
         if (dirname[0] == '/')
            strcpy(dirpath,dirname);
         else
-           snprintf(dirpath,sizeof(dirpath),"%s/%s",autodir,dirname);
+           snprintf(dirpath,MAXPATH,"%s/%s",autodir,dirname);
         if (vpmode)
         {
 	   strcpy(acqpath,dirpath);
