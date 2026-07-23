@@ -2836,7 +2836,7 @@ check_aipAnnotation()
 }
 
 int drawAnnotation(const char *key, int x, int y, int w, int h,
-                   int frameNum, int frameId, int newFlag)
+                   int frameNum, int frameId, bool newFlag)
 {
     int  newKey, newSize;
     int  i, k;
