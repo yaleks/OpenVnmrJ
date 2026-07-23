@@ -65,15 +65,16 @@ int     debug = 0;
 #endif 
 
 /*  Definition of the acquisition message entry uses trickery in
-    that the actual entry may be smaller than 256+4 bytes.  The
+    that the actual entry may be smaller than 1024+4 bytes.  The
     actual size is determined by the length of the message received
     from Acqproc.  The structure definition is only referenced by
-    pointers and never explicitly allocated.			*/
+    pointers and never explicitly allocated. NOTE: must stay in sync
+    with smagic.c's struct acqmsgentry (curentry[ACQMBUFSIZE]==1024).			*/
 
 struct acqmsgentry
 {
    char           *nextentry;
-   char            curentry[256];
+   char            curentry[1024];
 };
 
 
