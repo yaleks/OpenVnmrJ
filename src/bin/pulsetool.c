@@ -40,20 +40,29 @@
 #define PLOT_XOFFSET	-11
 #define PLOT_YOFFSET	-10
 
-typedef struct {
+typedef struct ppar_struct {
 	FILE *file;
 	char print_dir[MAXPATHL];
 	float ppmm;
 	int width, height, x_offset, y_offset;
 	int which;
-	int (*draw_line)();
-	int (*draw_segments)();
-	int (*draw_point)();
-	int (*draw_points)();
-	int (*draw_string)();
+	void (*draw_line)(struct ppar_struct *, int, int, int, int);
+	void (*draw_segments)(struct ppar_struct *, int *, int);
+	void (*draw_point)(struct ppar_struct *, int, int);
+	void (*draw_points)(struct ppar_struct *, int *, int);
+	void (*draw_string)(struct ppar_struct *, int, int, char *);
 	} ppar_struct;
 
 static ppar_struct *plot_par;
+void init_plot_par(ppar_struct *plot_par, int which);
+void start_plot(ppar_struct *plot_par);
+void end_plot(ppar_struct *plot_par);
+void ps_draw_line(ppar_struct *plot_par, int x1, int y1, int x2, int y2);
+void ps_draw_segments(ppar_struct *plot_par, int *data, int num);
+void ps_draw_point(ppar_struct *plot_par, int x1, int y1);
+void ps_draw_points(ppar_struct *plot_par, int *data, int num);
+void ps_draw_string(ppar_struct *plot_par, int x, int y, char *str);
+void set_print_save_filenames(void);
 int plot_flag = FALSE;
 /* END PLOT DEFINITIONS */
 
@@ -69,7 +78,7 @@ int plot_flag = FALSE;
 #define LEFT_MARGIN        150        /* left margin between large and plot canvas */
 #define TOP_MARGIN         50         /* top margin between large and plot canvas */
 #define BOTTOM_MARGIN      70         /* bottom margin between large and plot canvas */
-#define WIDTH              3*LG_WIDTH/4        /* width of plot canvas */
+#define WIDTH              (3*LG_WIDTH/4)       /* width of plot canvas */
 #define HEIGHT             (LG_HEIGHT - TOP_MARGIN - BOTTOM_MARGIN)
 #define AMP                0
 #define PHASE              1
@@ -91,7 +100,7 @@ int plot_flag = FALSE;
 
 #define BUTTON_GAP	2
 #define BUTTON_YOFFSET	4
-#define TEXT_GAP	8*BUTTON_GAP
+#define TEXT_GAP	(8*BUTTON_GAP)
 
 #define NUM_SM		   6
 #ifdef sparc
@@ -101,49 +110,97 @@ int plot_flag = FALSE;
 #endif
 
 int			char_width=0, char_height=0, char_ascent=0, char_descent=0;
-extern int		row(),
-			column(),
-			color_display;
-void                    start_pulsechild(),
-                        frame_message(),
-                        send_to_pulsechild(),
 
-                        repaint_small_canvases(),
-			repaint_large_canvas(),
-			repaint_plot_canvas(),
-			grid_cycle_proc(),
-                        update_cursor_labels(),
-			draw_line(),
-			draw_point(),
-			draw_points(),
-			draw_segments(),
-			draw_string(),
-			draw_inverse_string(),
-			clear_area(),
+typedef void (*gui_proc)(void);
 
-                        read_pattern_file(),     /* Calculation routines */
-
-                        quit_proc(),             /* Notification procedures */
-                        save_proc(),    
-                        print_proc(),    
-                        help_proc(),    
-                        files_proc(),
-    			do_files_proc(),
-			base_menu_action_proc(),
-                        select_large_state(),
-			simulate_3d_proc(),
-                        display_cycle_proc(),
-                        horiz_notify_proc(),
-                        expand_notify_proc(),
-                        param_notify_proc(),
-                        simulate_proc(),
-                        create_proc(),
-                        create_event_proc(),
-                        create_menu_proc(),
-                        create_cycle_proc(),
-                        large_canvas_event_handler(),
-                        plot_canvas_event_handler();
+extern int		color_display;
+int			row(int panel, int n);
+int			column(int panel, int n);
+int			object_width(int obj);
+win_val			get_panel_value(int obj);
+void			(set_panel_value)(int obj, win_val value);
+#define set_panel_value(obj, val) (set_panel_value)((obj), (win_val)(val))
+void			set_panel_label(int obj, const char *str);
+void			init_window(int argc, char *argv[]);
+void			screen_dims(int *w, int *h);
+void			setup_font(char **font);
+void			setup_colormap(void);
+void			setup_icon(void);
+void			create_frame(int frame, int parent, const char *label,
+				int x, int y, int w, int h);
+void			create_canvas(int win, int parent, int x, int y, int w, int h,
+				gui_proc repaint, gui_proc handler, int flag);
+void			create_panel(int panel, int parent, int x, int y, int w, int h);
+void			create_button(int obj, int panel, int x, int y,
+				const char *label, gui_proc proc);
+void			create_cycle(int obj, int panel, int x, int y, const char *label,
+				int n, char **strs, int init, gui_proc proc);
+void			create_panel_text(int obj, int panel, int x, int y,
+				const char *label, const char *init, int width,
+				gui_proc proc);
+void			create_panel_message(int obj, int panel, int x, int y,
+				const char *str);
+void			attach_menu_to_button(int button, int menu, int n, char **strs,
+				gui_proc proc);
+void			set_win_right_of(int win, int ref);
+void			set_win_below(int win, int ref);
+void			set_width(int obj, int w);
+void			set_height(int obj, int h);
+void			fit_height(int obj);
+void			fit_frame(int frame);
+void			hide_object(int obj);
+void			show_object(int obj);
+void			window_start_loop(int frame);
+void			start_graphics(int win);
+void			flush_graphics(int win);
+void			(set_frame_label)(int frame, win_val value);
+#define set_frame_label(frame, val) (set_frame_label)((frame), (win_val)(val))
+void			clear_window(int win);
+void			clear_area(int win, int x, int y, int w, int h);
+void			draw_inverse_string(int win, int x, int y, const char *str,
+				int color);
+void			xor_mode(int win);
+int			notice_yn(int frame, const char *msg);
+void			win_draw_line(int which, int x1, int y1, int x2, int y2, int color);
+void			win_draw_segments(int which, int *data, int num, int color);
+void			win_draw_point(int which, int x1, int y1, int color);
+void			win_draw_points(int which, int *data, int num, int color);
+void			win_draw_string(int which, int x, int y, char *str, int color);
+void			start_pulsechild(int argc, char *argv[]);
+void			frame_message(const char *msg, int obj);
+void			send_to_pulsechild(const char *str);
+void			repaint_small_canvases(void);
+void			repaint_large_canvas(void);
+void			repaint_plot_canvas(void);
+void			grid_cycle_proc(void);
+void			quit_proc(void);
+void			save_proc(void);
+void			print_proc(void);
+void			help_proc(void);
+void			files_proc(void);
+void			base_menu_action_proc(void);
+void			select_large_state(void);
+void			simulate_3d_proc(void);
+void			display_cycle_proc(void);
+void			horiz_notify_proc(void);
+void			expand_notify_proc(void);
+void			param_notify_proc(void);
+void			simulate_proc(void);
+void			create_proc(void);
+void			create_event_proc(void);
+void			create_menu_proc(void);
+void			create_cycle_proc(void);
+void			large_canvas_event_handler(void);
+void			plot_canvas_event_handler(void);
 extern void normal_mode(int which);
+void read_pattern_file(int steps);
+void update_cursor_labels(void);
+void do_files_proc(int item);
+void draw_line(int which, int x1, int y1, int x2, int y2, int color);
+void draw_segments(int which, int *data, int num, int color);
+void draw_point(int which, int x1, int y1, int color);
+void draw_points(int which, int *data, int num, int color);
+void draw_string(int which, int x, int y, char *str, int color);
 
 char	                pattern_name[80],
                         directory_name[256],
@@ -253,24 +310,23 @@ int			lg_width, lg_height,
 char			*font_name;
 int  *databuf;
 
-win_val			get_panel_value();
-static void init_small_canvases();
-static void init_main_button_panel();
-static void init_large_canvas();
-static void init_parameter_panel();
-static void init_create_window();
-static void init_simulate_window();
+static void init_small_canvases(void);
+static void init_main_button_panel(void);
+static void init_large_canvas(void);
+static void init_parameter_panel(void);
+static void init_create_window(void);
+static void init_simulate_window(void);
 static void parse_pulsetool_cmd_line(int argc, char *argv[]);
 static void pulse_gen(int mode);
-static void zero_fill_notify_proc();
+static void zero_fill_notify_proc(void);
 static void draw_cursors(int cursor_status, int cursor_position);
 static void clear_canvas(int mode);
 static void plot_large_canvas(int num);
 static void plot_small_canvas(int num);
 static void bloch_simulate(int mode);
-static void find_min_max();
-static void calc_real_imag_freq();
-static void fft_calc();
+static void find_min_max(void);
+static void calc_real_imag_freq(void);
+static void fft_calc(void);
 static void polar_display(int button, int down, int up, int drag,
                           int x, int y, int source_identifier);
 static void project_3d_point(double trig_values[], double x3d, double y3d, double z3d,
@@ -349,9 +405,7 @@ static void project_3d_point(double trig_values[], double x3d, double y3d, doubl
 *  and contains the information displayed when the "Help" button is
 *  selected.
 *************************************************************************/
-main(argc, argv)
-int  argc;
-char *argv[];
+int main(int argc, char *argv[])
 {
     int w, h;
 
@@ -384,7 +438,7 @@ char *argv[];
 
     setup_font(&font_name);
     setup_colormap();
-    create_frame(BASE_FRAME,NULL,"Pulsetool",20,40,1200,900);
+    create_frame(BASE_FRAME,0,"Pulsetool",20,40,1200,900);
     setup_icon();
     start_pulsechild(argc, argv);
     getcwd(directory_name, sizeof( directory_name ));
@@ -395,6 +449,10 @@ char *argv[];
     init_simulate_window();
     init_create_window();
     plot_par = (ppar_struct *)malloc(sizeof(ppar_struct));
+    if (plot_par == NULL) {
+	fprintf(stderr, "pulsetool: out of memory\n");
+	exit(1);
+    }
     getcwd(plot_par->print_dir, sizeof( plot_par->print_dir ));
     parse_pulsetool_cmd_line(argc, argv);
     window_start_loop(BASE_FRAME);
@@ -409,7 +467,7 @@ char *argv[];
 /*****************************************************************
 *  Initialize the small canvases along the top of the window.
 *****************************************************************/
-static void init_small_canvases()
+static void init_small_canvases(void)
 {
     create_canvas(SM_WIN_1,BASE_FRAME,0,0,sm_width,sm_height,
 			repaint_small_canvases,select_large_state,TRUE);
@@ -437,11 +495,10 @@ static void init_small_canvases()
 *  buttons, and the Grid On/Off and Display Pulse/Simulation
 *  cycles.
 *****************************************************************/
-static void init_main_button_panel()
+static void init_main_button_panel(void)
 {
     char *strs[8];
     int tot_width=0, width1, width2;
-    int object_width();
 
     create_panel(MAIN_BUTTON_PANEL,BASE_FRAME,0,0,lg_width,lg_height);
     set_win_below(MAIN_BUTTON_PANEL,SM_WIN_1);
@@ -521,7 +578,7 @@ static void init_main_button_panel()
 *  overlays the central portion of the main graphics area, and
 *  is used to plot the selected data.
 *****************************************************************/
-static void init_large_canvas()
+static void init_large_canvas(void)
 {
     create_canvas(LG_WIN,BASE_FRAME,0,0,lg_width,lg_height,
 			repaint_large_canvas,large_canvas_event_handler,TRUE);
@@ -539,7 +596,7 @@ static void init_large_canvas()
 *  number of pulse steps, current fourier number, power factor,
 *  pulse integral, vertical scale and vertical reference.
 *****************************************************************/
-static void init_parameter_panel()
+static void init_parameter_panel(void)
 {
     int tot_width, width1, width2;
 
@@ -602,7 +659,7 @@ static void init_parameter_panel()
 /*****************************************************************
 *  Initialize the pulse creation window.  
 *****************************************************************/
-static void init_create_window()
+static void init_create_window(void)
 {
     char *strs[12];
     int row_inc=4, i;
@@ -680,7 +737,7 @@ static void init_create_window()
 /*****************************************************************
 *  Initialize the Bloch simulation window.
 *****************************************************************/
-static void init_simulate_window()
+static void init_simulate_window(void)
 {
     char *strs[3];
     static char   parameter_label_string[10][32] = {"Mx:", "My:", "Mz:",
@@ -833,7 +890,7 @@ static void parse_pulsetool_cmd_line(int argc, char *argv[])
     }
 }
 
-set_print_save_filenames()
+void set_print_save_filenames(void)
 {
     char name[MAXPATHL];
 
@@ -899,8 +956,7 @@ set_print_save_filenames()
 *  value, then we are processing data already loaded into the
 *  "pattern" array by pulse_gen().
 ******************************************************************/
-void read_pattern_file(steps)
-int   steps;
+void read_pattern_file(int steps)
 {
     int     i,k;
     double  amplitude, phase, time_count;
@@ -990,7 +1046,7 @@ int   steps;
 		* is the case, inform the user and end the attempt to read data.
 		****/
                 else {
-                    for (i=0; i<strlen(comments_array[comment_counter].str); i++) {
+                    for (i=0; i<(int)strlen(comments_array[comment_counter].str); i++) {
                         if (!isspace(comments_array[comment_counter].str[i])) {
                             frame_message(
                                 "Read error:  Incorrect pattern format.", PARAM_FILE_NAME);
@@ -1113,13 +1169,12 @@ int   steps;
 /*****************************************************************
 *  Save data in large canvas to an external file.       
 *****************************************************************/
-void do_save_proc(item)
-int item;
+void do_save_proc(int item)
 {
     int     i;
     double  ft_freq;
     char    name[MAXPATHL], name0[MAXPATHL];
-    FILE    *out_ptr, *fopen();
+    FILE    *out_ptr;
 
     static int  save_flag=0;
 
@@ -1191,13 +1246,12 @@ int item;
 /*****************************************************************
 *  Print data in large canvas to an external file.       
 *****************************************************************/
-void do_print_proc(item)
-int item;
+void do_print_proc(int item)
 {
     int     i;
     double  ft_freq;
     char    name[MAXPATHL],name0[MAXPATHL];
-    FILE    *out_ptr, *fopen();
+    FILE    *out_ptr;
 
     static int  print_flag=FALSE;
 
@@ -1253,7 +1307,7 @@ int item;
 /*****************************************************************
 *  Called when the "Thresh"/"Scale" button is selected.
 *****************************************************************/
-void do_horiz_notify_proc()
+void do_horiz_notify_proc(void)
 {
     /****
     * If the horizontal cursor is inactive, turn it on and change
@@ -1281,7 +1335,7 @@ void do_horiz_notify_proc()
 /*****************************************************************
 *  Called when the Expand/Full button is selected.
 *****************************************************************/
-void do_expand_notify_proc()
+void do_expand_notify_proc(void)
 {
     double   left_val, right_val, points, ft_freq;
     int      start_point, end_point;
@@ -1387,8 +1441,7 @@ void do_expand_notify_proc()
 *  in the create window, which is subsequently activated.
 *  
 *****************************************************************/
-void do_create_menu_proc(str)
-char *str;
+void do_create_menu_proc(char *str)
 {
     int    i, count, length;
     static char  *comment[][2] = {
@@ -1437,8 +1490,8 @@ char *str;
 
 
     i=0;
-    while ((strcmp(str,create_menu_strings[i]) != 0) &&
-		(i < NUM_CREATE_MENU_STRINGS))
+    while ((i < NUM_CREATE_MENU_STRINGS) &&
+		(strcmp(str,create_menu_strings[i]) != 0))
       {i++;}
     menu_val = i;
 
@@ -1513,15 +1566,12 @@ char *str;
 	  hide_object(CREATE_ATTRIBUTE_PANEL_4);
 	  }
 	/****
-	* A square pulse needs only 1 step;  all other pulse default
+    * A square pulse needs only 1 step;  all other pulse default
 	* to 256 steps.
 	* A square pulse needs to be > 1 or it doesn't get drawn and can't
 	* be used for simulation - (MER 9-4-92)
 	****/
-	if (menu_val == 0)
-	  set_panel_value(CREATE_STEPS_CYCLE,8);
-	else
-	  set_panel_value(CREATE_STEPS_CYCLE,8);
+	set_panel_value(CREATE_STEPS_CYCLE,8);
 
 	/****
 	* Fit the window to the length of the comment lines.
@@ -1533,8 +1583,7 @@ char *str;
 * Routine for the Done, Preview, or
 * Execute buttons of the create panel.
 ******************************************************************************/
-void do_create_proc(item)
-int    item;
+void do_create_proc(int item)
 {
     if (item == CREATE_DONE_BUTTON) {
 	hide_object(CREATE_FRAME);
@@ -1565,7 +1614,7 @@ static void pulse_gen(int mode)
     double  A, var1, var2, var3, lobes, length, coshx, mu, tip_angle;
     double  theta_max, alpha, thresh, bw, time, b1min, fmax, cutoff; 
     double  constant;
-    FILE    *out_ptr, *fopen();
+    FILE    *out_ptr;
 
     struct stat  statbuf;
 
@@ -1575,6 +1624,12 @@ static void pulse_gen(int mode)
     ****/
     amp = (double *)malloc(steps*sizeof(double));
     phase = (double *)malloc(steps*sizeof(double));
+    if (amp == NULL  ||  phase == NULL) {
+	free(amp);
+	free(phase);
+	frame_message("Out of memory.", CREATE_EXECUTE_BUTTON);
+	return;
+    }
 
     /****
     * Calculate the selected pulse.
@@ -1687,6 +1742,8 @@ static void pulse_gen(int mode)
 	strcpy(name, (char *)get_panel_value(CREATE_NAME_PANEL));
 	if (!strcmp(name, "")) {
 	    frame_message("Please enter a file name.", CREATE_EXECUTE_BUTTON);
+	    free(amp);
+	    free(phase);
 	    return;
 	}
 	return_val = stat(name, &statbuf);
@@ -1705,7 +1762,7 @@ static void pulse_gen(int mode)
 	* If the file is new, or confirm_val of 0 is returned,
 	* open and write to the file. 
 	****/
-	if (out_ptr = fopen (name, "w")) {
+	if ((out_ptr = fopen (name, "w"))) {
 	    for (i=0; i<steps; i++) {
 		fprintf (out_ptr,"%8.2f        %6.2f        %4.1f\n",
 		    phase[i], amp[i], 1.0);
@@ -1727,7 +1784,7 @@ static void pulse_gen(int mode)
 *  a new FFT with a fourier size increased by two, and updates
 *  the plot.
 *****************************************************************/
-static void zero_fill_notify_proc()
+static void zero_fill_notify_proc(void)
 {
     if (++fft_index > 12) {
       --fft_index;
@@ -1745,9 +1802,7 @@ static void zero_fill_notify_proc()
 *  This routine handles mouse events in the plot canvas to
 *  activate and update the vertical and horizontal cursors.
 *****************************************************************/
-void
-do_plot_canvas_event_handler(button,down,up,drag, ctrl, x, y)
-int button,down, up, drag, ctrl, x, y;
+void do_plot_canvas_event_handler(int button, int down, int up, int drag, int ctrl, int x, int y)
 {
     int     position, y_position, point, ev;
     double  ft_freq, x_val, y_val, data_val;
@@ -1991,8 +2046,7 @@ static void draw_cursors(int cursor_status, int cursor_position)
 *  (i.e., M for Mega, k for kilo, m for milli, u for micro) is
 *  concatenated after the numerical part of the string.
 *****************************************************************/
-char *scale_and_add_units(value)
-double  value;
+char *scale_and_add_units(double value)
 {
     static char   label[32];
     int    unit_size;
@@ -2010,11 +2064,11 @@ double  value;
 	sprintf(label, "%-.2f", value);
 	strcat(label, " ");
     }
-    else if (unit_size < 0  &&  unit_size > -3) {
+    else if (unit_size > -3) {
 	sprintf(label, "%-.2f", value*1000.0);
 	strcat(label, " m");
     }
-    else if (unit_size <= -3) {
+    else {
 	sprintf(label, "%-.2f", value*1.0e6);
 	strcat(label, " u");
     }
@@ -2027,7 +2081,7 @@ double  value;
 *  Print the values represented by the cursors at the bottom
 *  of the large canvas.
 *****************************************************************/
-void update_cursor_labels()
+void update_cursor_labels(void)
 {
     int     ycoord, l_pos, r_pos, del_pos, h_pos, precision, sweep_var, units_index;
     double  left_val, right_val, delta_val, horiz_val,
@@ -2127,8 +2181,7 @@ void update_cursor_labels()
 *  This routine is called when the "Directory" and "Pulse Name"
 *  text items are modified, and by the "Files" button.
 *****************************************************************/
-void do_files_proc(item)
-int   item;
+void do_files_proc(int item)
 {
     char         string[512], old_directory_name[256];
 
@@ -2199,7 +2252,7 @@ static void clear_canvas(int mode)
 *  button panel to toggle between display of pulse data and 
 *  simulation results.
 *****************************************************************/
-void do_display_cycle_proc()
+void do_display_cycle_proc(void)
 {
     int    display_state, k;
 
@@ -2250,7 +2303,7 @@ void do_display_cycle_proc()
     }
 }
 
-void do_grid_cycle_proc()
+void do_grid_cycle_proc(void)
 {
     plot_large_canvas(0);
     plot_large_canvas(1);
@@ -2261,8 +2314,7 @@ void do_grid_cycle_proc()
 *  This routine handles the buttons associated with the Bloch
 *  simulation window.
 *****************************************************************/
-void do_simulate_proc(item)
-int    item;
+void do_simulate_proc(int item)
 {
     int     i, sweep_var, x_pos, y_pos, k;
     double  value;
@@ -2644,8 +2696,7 @@ int    item;
 *  in the bottom panel is changed.  It checks the validity of the
 *  new value or string, and takes appropriate action in each case.
 *****************************************************************/
-void do_param_notify_proc(item)
-int   item;
+void do_param_notify_proc(int item)
 {
     double  new_val;
     char    string[32];
@@ -2742,7 +2793,7 @@ int   item;
 }
  
 
-void do_repaint_large_canvas()
+void do_repaint_large_canvas(void)
 {
     if (flag_3d)  {
 	start_graphics(LG_WIN);
@@ -2772,7 +2823,7 @@ void do_repaint_large_canvas()
 }
 
 
-void do_repaint_plot_canvas()
+void do_repaint_plot_canvas(void)
 {
     unsigned long event;
     static int firsttime = TRUE;
@@ -2840,6 +2891,11 @@ static void plot_large_canvas(int num)
 	    start_point = start_point < 0 ? 0 : start_point;
 	    end_point = end_point >= sim_steps ? sim_steps-1 : end_point;
             data_width = (double)(end_point - start_point);
+            break;
+
+        default:
+            start_point = end_point = 0;
+            data_width = 1.0;
             break;
     }
 
@@ -2951,7 +3007,7 @@ static void plot_large_canvas(int num)
     *  Draw dotted grid lines if "grid_flag" is set to 1.
     *****/
     grid_flag = (int)get_panel_value(MAIN_GRID_CYCLE);
-  if (!plot_flag)
+  if (!plot_flag && grid_flag)
     for (i=0; i<=10; i++) {
         xpos = LEFT_MARGIN + i*pl_width/10;
         if (grid_flag  &&  (i>0 && i<10)){
@@ -2968,7 +3024,7 @@ static void plot_large_canvas(int num)
         }
     }
 
-  if (!plot_flag)
+  if (!plot_flag) {
     for (i=0; i<=10; i++) {
         ypos = TOP_MARGIN + i*pl_height/10;
         if (grid_flag  &&  (i>0 && i<10)){
@@ -2984,6 +3040,7 @@ static void plot_large_canvas(int num)
 	      draw_points(PLOT_WIN,data,counter,RED);
         }
     }
+  }
     /*****
     * Set the starting x and y coordinate values for the plot.
     * successive values are determined inside the loop below.
@@ -3015,7 +3072,7 @@ static void plot_large_canvas(int num)
             else
                 y_new = pl_height - rint((pattern[lg_state][i] - min_val)
                     /(max_val - min_val)*(double)pl_height);
-	y_new = abs(y_new) - 5*pl_height > 0 ?
+	y_new = fabs((double)y_new) - 5.0*pl_height > 0.0 ?
 	    (int)copysign(5.0*(double)pl_height, (double)y_new) : y_new;
 	data[2*counter] = x_old;
 	data[2*counter+1] = y_old;
@@ -3047,8 +3104,7 @@ static void plot_large_canvas(int num)
 /*********************************************************************
 *  Repaint small canvases 
 *********************************************************************/
-void do_repaint_small_canvases(which)
-int which;
+void do_repaint_small_canvases(int which)
 {
     plot_small_canvas(which-SM_WIN_1);
 }
@@ -3112,8 +3168,7 @@ static void plot_small_canvas(int num)
         data[2*counter] = x_old;
         data[2*counter+1] = y_old[num];
         counter++;
-	if (counter != 0) 
-	  draw_segments(SM_WIN_1+num,data,counter,CYAN+num);
+	draw_segments(SM_WIN_1+num,data,counter,CYAN+num);
     }
     else {
 	counter = 0;
@@ -3133,8 +3188,7 @@ static void plot_small_canvas(int num)
         data[2*counter] = x_old;
         data[2*counter+1] = y_old[num];
         counter++;
-	if (counter != 0) 
-	  draw_segments(SM_WIN_1+num,data,counter,CYAN+num);
+	draw_segments(SM_WIN_1+num,data,counter,CYAN+num);
     }
     }
 
@@ -3161,8 +3215,7 @@ static void plot_small_canvas(int num)
     data[2*counter] = x_old;
     data[2*counter+1] = y_old[num];
     counter++;
-    if (counter != 0) 
-	  draw_segments(SM_WIN_1+num,data,counter,CYAN+num);
+    draw_segments(SM_WIN_1+num,data,counter,CYAN+num);
     }
   flush_graphics(SM_WIN_1+num);
 }
@@ -3193,8 +3246,7 @@ static void plot_small_canvas(int num)
 *                  10  Mz
 *
 ******************************************************************/
-void do_select_large_state(which, button)
-int which, button;
+void do_select_large_state(int which, int button)
 {
     int     i;
     char name[MAXPATHL];
@@ -3447,7 +3499,7 @@ static void bloch_simulate(int mode)
 		pulse_index--;
 	    }
 
-            reuse = (cache != NULL  &&  have  &&  b1mult == last_b1mult);
+            reuse = (c_b1 != NULL  &&  have  &&  b1mult == last_b1mult);
 
             /*****
             * Step through either the B1, or frequency range.
@@ -3476,7 +3528,7 @@ static void bloch_simulate(int mode)
                         one_min_ct = 1.0 - ct;
                         z = freq/mag;
                     }
-                    if (cache != NULL) {
+                    if (c_b1 != NULL) {
                         c_b1[j] = b1;
                         c_mag[j] = mag;
                         if (mag > 0.0) {
@@ -3523,7 +3575,7 @@ static void bloch_simulate(int mode)
                 else if (sweep_var == 1)
                     b1max += increment;
             } 
-            if (cache != NULL) {
+            if (c_b1 != NULL) {
                 have = 1;
                 last_b1mult = b1mult;
             }
@@ -3563,7 +3615,7 @@ static void bloch_simulate(int mode)
 *  Find the minima and maxima in amplitude, phase, 
 *  real, imaginary, frequency, and fft data.
 *********************************************************************/
-static void find_min_max()
+static void find_min_max(void)
 {
     int      i, j;
     double   ft_max=0.0;
@@ -3603,7 +3655,7 @@ static void find_min_max()
 /*********************************************************************
 *  Fill in the pattern array with real, imaginary, and frequency.
 *********************************************************************/
-static void calc_real_imag_freq()
+static void calc_real_imag_freq(void)
 {
     int     i;
     double  freq_old, freq_new;
@@ -3640,7 +3692,7 @@ static void calc_real_imag_freq()
 /*********************************************************************
 *  Calculate the fourier transform of the pattern.
 *********************************************************************/
-static void fft_calc()
+static void fft_calc(void)
 {
     int      i, j, mmax, m, istep, n;
     double   wr, wi, wpr, wpi, wtemp, tempr, tempi, theta;
@@ -3727,7 +3779,7 @@ static void fft_calc()
 
 /*****************************************************************
 ******************************************************************/
-void do_simulate_3d_proc()
+void do_simulate_3d_proc(void)
 {
         flag_3d = 1;
 	clear_canvas(2);
@@ -3959,10 +4011,8 @@ static void project_3d_point(double trig_values[], double x3d, double y3d, doubl
     *intensity = zprime*trig_values[2] + yprime*trig_values[3];
 }
 
-void draw_line(which, x1, y1, x2, y2, color)
-int which, x1, y1, x2, y2, color;
+void draw_line(int which, int x1, int y1, int x2, int y2, int color)
 {
-    void win_draw_line();
 
     if (!plot_flag)  {
       win_draw_line(which, x1, y1, x2, y2, color);
@@ -3976,10 +4026,7 @@ int which, x1, y1, x2, y2, color;
       }
 }
 
-void draw_segments(which, data, num, color)
-int which;
-int *data;
-int num, color;
+void draw_segments(int which, int *data, int num, int color)
 {
     int i;
 
@@ -3995,8 +4042,7 @@ int num, color;
       }
 }
 
-void draw_point(which, x1, y1, color)
-int which, x1, y1, color;
+void draw_point(int which, int x1, int y1, int color)
 {
     if (!plot_flag)
       win_draw_point(which, x1, y1, color);
@@ -4008,10 +4054,7 @@ int which, x1, y1, color;
       }
 }
 
-void draw_points(which, data, num, color)
-int which;
-int *data;
-int num, color;
+void draw_points(int which, int *data, int num, int color)
 {
     int i;
 
@@ -4027,10 +4070,7 @@ int num, color;
       }
 }
 
-void draw_string(which, x, y, str, color)
-int which, x, y;
-char *str;
-int color;
+void draw_string(int which, int x, int y, char *str, int color)
 {
     if (!plot_flag)
       win_draw_string(which, x, y, str, color);
@@ -4042,12 +4082,8 @@ int color;
       }
 }
 
-init_plot_par(plot_par,which)
-ppar_struct *plot_par;
-int which;
+void init_plot_par(ppar_struct *plot_par, int which)
 {
-    int ps_draw_line(), ps_draw_segments(), ps_draw_point(), ps_draw_points(),
-	ps_draw_string();
     plot_par->which = which;
     switch (which)  {
       case PS :
@@ -4066,8 +4102,7 @@ int which;
     plot_par->y_offset = PLOT_YOFFSET*plot_par->ppmm;
 }
 
-start_plot(plot_par)
-ppar_struct *plot_par;
+void start_plot(ppar_struct *plot_par)
 {
  switch (plot_par->which)  {
    case PS :
@@ -4092,9 +4127,7 @@ ppar_struct *plot_par;
    }
 }
 
-ps_draw_line(plot_par,x1,y1,x2,y2)
-ppar_struct *plot_par;
-int x1,y1,x2,y2;
+void ps_draw_line(ppar_struct *plot_par, int x1, int y1, int x2, int y2)
 { 
   x1 = (x1*plot_par->width)/lg_width+plot_par->x_offset;
   x2 = (x2*plot_par->width)/lg_width+plot_par->x_offset;
@@ -4103,9 +4136,7 @@ int x1,y1,x2,y2;
   fprintf(plot_par->file,"%d %d mv\n%d %d ls\n",x1,y1,x2,y2);
 }
 
-ps_draw_segments(plot_par,data,num)
-ppar_struct *plot_par;
-int *data, num;
+void ps_draw_segments(ppar_struct *plot_par, int *data, int num)
 { 
     int i;
 
@@ -4115,18 +4146,14 @@ int *data, num;
       }
 }
 
-ps_draw_point(plot_par,x1,y1)
-ppar_struct *plot_par;
-int x1,y1;
+void ps_draw_point(ppar_struct *plot_par, int x1, int y1)
 { 
   x1 = (x1*plot_par->width)/lg_width+plot_par->x_offset;
   y1 = plot_par->height-((y1*plot_par->height)/lg_height+plot_par->y_offset);
   fprintf(plot_par->file,"%d %d mv %d %d bx\n",x1,y1,2,2);
 }
 
-ps_draw_points(plot_par,data,num)
-ppar_struct *plot_par;
-int *data, num;
+void ps_draw_points(ppar_struct *plot_par, int *data, int num)
 { 
     int i;
 
@@ -4135,18 +4162,14 @@ int *data, num;
       }
 }
 
-ps_draw_string(plot_par,x,y,str)
-ppar_struct *plot_par;
-int x,y;
-char *str;
+void ps_draw_string(ppar_struct *plot_par, int x, int y, char *str)
 {
    x = (x*plot_par->width)/lg_width+plot_par->x_offset;
    y = plot_par->height-((y*plot_par->height)/lg_height+plot_par->y_offset);
    fprintf(plot_par->file,"%d %d mv\n(%s) show\n",x,y,str);
 }
 
-end_plot(plot_par)
-ppar_struct *plot_par;
+void end_plot(ppar_struct *plot_par)
 {
  switch (plot_par->which)  {
    case PS :
